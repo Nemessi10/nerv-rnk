@@ -1,25 +1,39 @@
+import type React from "react";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "~/styles/globals.css";
+import { ThemeProvider } from "~/components/theme-provider";
+import { TopNav } from "~/components/top-nav";
 
-import { type Metadata } from "next";
-import { Geist } from "next/font/google";
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "nerv-rnk",
-  description: "nerv-rnk: rank what moves you.",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  title: "nerv-rnk | Music Album Rating & Analytics",
+  description: "Track, rate, and analyze your music listening habits",
 };
-
-const geist = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist-sans",
-});
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en" className={`${geist.variable}`}>
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${inter.className} bg-background text-foreground antialiased`}
+      >
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="nerv-dark"
+          enableSystem={false}
+          themes={["nerv-dark", "nerv-wave"]}
+        >
+          <div className="flex min-h-screen flex-col">
+            <TopNav />
+            <main className="flex-1 pt-16">{children}</main>
+          </div>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

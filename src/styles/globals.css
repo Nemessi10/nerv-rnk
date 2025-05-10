@@ -1,6 +1,205 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+@layer base {
+  :root {
+    --background: 260 35% 7%;
+    --foreground: 266 21% 94%;
+
+    --card: 262 22% 10%;
+    --card-foreground: 266 21% 94%;
+
+    --popover: 262 22% 10%;
+    --popover-foreground: 266 21% 94%;
+
+    --primary: 262 85% 73%;
+    --primary-foreground: 260 35% 7%;
+
+    --secondary: 262 68% 33%;
+    --secondary-foreground: 266 21% 94%;
+
+    --muted: 262 30% 15%;
+    --muted-foreground: 266 10% 70%;
+
+    --accent: 334 67% 57%;
+    --accent-foreground: 266 21% 94%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 266 21% 94%;
+
+    --border: 262 30% 20%;
+    --input: 262 30% 20%;
+    --ring: 262 85% 73%;
+
+    --radius: 0.5rem;
+  }
+
+  .nerv-dark {
+    --background: 260 35% 7%;
+    --foreground: 266 21% 94%;
+
+    --card: 262 22% 10%;
+    --card-foreground: 266 21% 94%;
+
+    --popover: 262 22% 10%;
+    --popover-foreground: 266 21% 94%;
+
+    --primary: 262 85% 73%;
+    --primary-foreground: 260 35% 7%;
+
+    --secondary: 262 68% 33%;
+    --secondary-foreground: 266 21% 94%;
+
+    --muted: 262 30% 15%;
+    --muted-foreground: 266 10% 70%;
+
+    --accent: 334 67% 57%;
+    --accent-foreground: 266 21% 94%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 266 21% 94%;
+
+    --border: 262 30% 20%;
+    --input: 262 30% 20%;
+    --ring: 262 85% 73%;
+  }
+
+  .nerv-wave {
+    --background: 260 35% 7%;
+    --foreground: 266 21% 94%;
+
+    --card: 262 22% 10%;
+    --card-foreground: 266 21% 94%;
+
+    --popover: 262 22% 10%;
+    --popover-foreground: 266 21% 94%;
+
+    --primary: 262 85% 73%;
+    --primary-foreground: 260 35% 7%;
+
+    --secondary: 262 68% 33%;
+    --secondary-foreground: 266 21% 94%;
+
+    --muted: 262 30% 15%;
+    --muted-foreground: 266 10% 70%;
+
+    --accent: 334 67% 57%;
+    --accent-foreground: 266 21% 94%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 266 21% 94%;
+
+    --border: 262 30% 20%;
+    --input: 262 30% 20%;
+    --ring: 262 85% 73%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom component styles */
+.btn-no-border {
+  @apply border-0 shadow-none;
+}
+
+.card-no-border {
+  @apply border-0 shadow-sm;
+}
+
+.tab-no-border {
+  @apply border-0 shadow-none;
+}
+
+.album-card {
+  transition:
+    transform 0.2s ease-in-out,
+    box-shadow 0.2s ease-in-out;
+  @apply border-0;
+}
+
+.album-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.rating-slider::-webkit-slider-thumb {
+  @apply bg-primary;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.rating-slider::-moz-range-thumb {
+  @apply bg-primary;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.genre-tag {
+  transition: all 0.2s ease;
+  @apply border-0;
+}
+
+.genre-tag:hover {
+  transform: scale(1.05);
+}
+
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .album-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .album-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--secondary));
+}
+
+/* Glow effects */
+.glow-primary {
+  box-shadow: 0 0 15px rgba(171, 128, 245, 0.2);
+  @apply border-0;
+}
+
+.glow-accent {
+  box-shadow: 0 0 15px rgba(218, 71, 134, 0.2);
+  @apply border-0;
 }
