@@ -13,6 +13,8 @@ import { Disc3, Plus, Star, TrendingUp } from "lucide-react";
 import { ScrollArea, ScrollBar } from "~/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Badge } from "~/components/ui/badge";
+import { SpotifyLoginButton } from "~/components/spotify-login-button";
+
 
 // Mock data for trending albums
 const trendingAlbums = [
@@ -110,6 +112,7 @@ export default function Dashboard() {
         <Button className="gap-2 bg-accent hover:bg-accent/90" size="lg">
           <Plus className="h-4 w-4" />
           Rate a new album
+          <SpotifyLoginButton />
         </Button>
       </div>
 
