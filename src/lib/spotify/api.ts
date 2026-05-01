@@ -1,26 +1,61 @@
-const getToken = () => {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem("spotify_access_token");
+import { refreshAccessToken } from "~/lib/spotify-refresh";
+import { clearSpotifyAuth } from "~/lib/auth-utils";
+
+const getValidToken = async () => {
+  const token = localStorage.getItem("spotify_access_token");
+  const expiresAtRaw = localStorage.getItem("spotify_expires_at");
+
+  if (!token || !expiresAtRaw) return null;
+
+  const expiresAt = Number(expiresAtRaw);
+
+  if (Date.now() < expiresAt - 5000) {
+    return token;
+  }
+
+  return await refreshAccessToken();
 };
 
 export const spotifyRequest = async <T>(
   endpoint: string,
-  options?: RequestInit,
+  options?: RequestInit
 ): Promise<T> => {
-  const token = getToken();
+  let token = localStorage.getItem("spotify_access_token");
 
   if (!token) {
-    throw new Error("No Spotify access token found");
+    throw new Error("NO_TOKEN");
   }
 
-  const res = await fetch(`https://api.spotify.com/v1${endpoint}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
-    },
-  });
+  const makeRequest = (t: string) =>
+    fetch(`https://api.spotify.com/v1${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${t}`,
+        "Content-Type": "application/json",
+        ...(options?.headers || {}),
+      },
+    });
+
+  let res = await makeRequest(token);
+
+  if (res.status === 401) {
+    console.log("🔄 Token expired → trying refresh");
+
+    try {
+      token = await refreshAccessToken();
+    } catch (err) {
+      console.log("Refresh failed → logout");
+
+      clearSpotifyAuth();
+      window.location.href = "/";
+
+      throw err;
+    }
+
+    console.log("🔁 Retrying request with new token");
+
+    res = await makeRequest(token);
+  }
 
   if (!res.ok) {
     throw new Error(`Spotify API error: ${res.status}`);
