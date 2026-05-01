@@ -1,30 +1,31 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { setAccessToken } from "~/lib/spotify";
 import { useRouter } from "next/navigation";
+import { useAuth } from "~/hooks/use-auth";
 
 export default function CallbackPage() {
   const hasRun = useRef(false);
   const router = useRouter();
+  const { login } = useAuth();
 
   useEffect(() => {
     if (hasRun.current) return;
     hasRun.current = true;
 
-    const getToken = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
+    const run = async () => {
+      const code = new URLSearchParams(window.location.search).get("code");
 
       if (!code) {
-        console.error("No authorization code found");
+        console.error("No code");
         return;
       }
 
-      const verifier = localStorage.getItem("code_verifier");
+      const verifier = sessionStorage.getItem("code_verifier");
 
       if (!verifier) {
-        console.error("No code verifier found");
+        console.error("Missing code_verifier");
+        router.replace("/");
         return;
       }
 
@@ -44,40 +45,20 @@ export default function CallbackPage() {
 
       const data = await res.json();
 
-      console.log("TOKEN:", data);
-
       if (!data.access_token) {
-        console.error("Failed to get access token", data);
+        console.error(data);
         return;
       }
 
-      // ✅ 1. persist token
-      setAccessToken(data.access_token);
-      localStorage.setItem("spotify_access_token", data.access_token);
+      await login(data.access_token);
 
-      if (data.refresh_token) {
-        localStorage.setItem("spotify_refresh_token", data.refresh_token);
-      }
+      sessionStorage.removeItem("code_verifier");
 
-      // optional cleanup
-      localStorage.removeItem("code_verifier");
-
-      // ✅ 2. test request (optional)
-      const profileRes = await fetch("https://api.spotify.com/v1/me", {
-        headers: {
-          Authorization: `Bearer ${data.access_token}`,
-        },
-      });
-
-      const profile = await profileRes.json();
-      console.log("PROFILE:", profile);
-
-      // ✅ 3. IMPORTANT: redirect to app
-      router.push("/library");
+      router.replace("/library");
     };
 
-    getToken();
-  }, [router]);
+    run();
+  }, [login, router]);
 
-  return <div className="p-10">Authorizing Spotify...</div>;
+  return <div className="p-10">Authorizing...</div>;
 }

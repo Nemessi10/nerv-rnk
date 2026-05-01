@@ -11,7 +11,7 @@ type CachedData = {
 export const getCachedLibrary = (): Album[] | null => {
   if (typeof window === "undefined") return null;
 
-  const raw = localStorage.getItem(CACHE_KEY);
+  const raw = sessionStorage.getItem(CACHE_KEY);
   if (!raw) return null;
 
   try {
@@ -20,7 +20,7 @@ export const getCachedLibrary = (): Album[] | null => {
     const isExpired = Date.now() - parsed.timestamp > CACHE_TTL;
 
     if (isExpired) {
-      localStorage.removeItem(CACHE_KEY);
+      sessionStorage.removeItem(CACHE_KEY);
       return null;
     }
 
@@ -38,9 +38,9 @@ export const setCachedLibrary = (data: Album[]) => {
     data,
   };
 
-  localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+  sessionStorage.setItem(CACHE_KEY, JSON.stringify(payload));
 };
 
 export const clearCachedLibrary = () => {
-  localStorage.removeItem(CACHE_KEY);
+  sessionStorage.removeItem(CACHE_KEY);
 };

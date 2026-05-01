@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "~/components/ui/button";
@@ -14,6 +16,7 @@ import { ScrollArea, ScrollBar } from "~/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Badge } from "~/components/ui/badge";
 import { SpotifyLoginButton } from "~/components/spotify-login-button";
+import { useAuth } from "~/hooks/use-auth";
 
 
 // Mock data for trending albums
@@ -100,6 +103,27 @@ const recentlyRated = [
 ];
 
 export default function Dashboard() {
+   const { isLoggedIn, isLoading } = useAuth();
+
+   if (isLoading) {
+    return <div className="p-10">Loading...</div>;
+  }
+   
+   if (!isLoggedIn) {
+    return (
+      <div className="container mx-auto px-4 py-10">
+        <div className="flex flex-col items-center justify-center text-center gap-4">
+          <h1 className="text-3xl font-bold">Welcome to nerv-rnk</h1>
+          <p className="text-muted-foreground">
+            Login with Spotify to start rating albums
+          </p>
+
+          <SpotifyLoginButton />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-6 md:py-10">
       <div className="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
@@ -112,7 +136,6 @@ export default function Dashboard() {
         <Button className="gap-2 bg-accent hover:bg-accent/90" size="lg">
           <Plus className="h-4 w-4" />
           Rate a new album
-          <SpotifyLoginButton />
         </Button>
       </div>
 

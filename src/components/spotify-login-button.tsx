@@ -2,11 +2,12 @@
 
 import { Button } from "~/components/ui/button";
 
-function generateCodeVerifier(length: number = 64) {
-  const possible =
+function generateCodeVerifier(length = 64) {
+  const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
   return Array.from(crypto.getRandomValues(new Uint8Array(length)))
-    .map((x) => possible[x % possible.length])
+    .map((x) => chars[x % chars.length])
     .join("");
 }
 
@@ -25,8 +26,7 @@ export function SpotifyLoginButton() {
     const verifier = generateCodeVerifier();
     const challenge = await generateCodeChallenge(verifier);
 
-    // 🔥 зберігаємо verifier
-    localStorage.setItem("code_verifier", verifier);
+    sessionStorage.setItem("code_verifier", verifier);
 
     const params = new URLSearchParams({
       client_id: process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID!,
