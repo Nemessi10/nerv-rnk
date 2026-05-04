@@ -20,7 +20,7 @@ export const spotifyRequest = async <T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> => {
-  let token = localStorage.getItem("spotify_access_token");
+  let token = await getValidToken();
 
   if (!token) {
     throw new Error("NO_TOKEN");
@@ -32,7 +32,7 @@ export const spotifyRequest = async <T>(
       headers: {
         Authorization: `Bearer ${t}`,
         "Content-Type": "application/json",
-        ...(options?.headers || {}),
+        ...(options?.headers ?? {}),
       },
     });
 
@@ -52,8 +52,6 @@ export const spotifyRequest = async <T>(
       throw err;
     }
 
-    console.log("🔁 Retrying request with new token");
-
     res = await makeRequest(token);
   }
 
@@ -63,3 +61,4 @@ export const spotifyRequest = async <T>(
 
   return res.json();
 };
+
