@@ -62,6 +62,19 @@ export default function CallbackPage() {
 
       login(data.access_token);
 
+      // console.log("SYNC START");
+
+      const syncRes = await fetch("/api/auth/sync-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ accessToken: data.access_token }),
+      });
+
+      const syncData = await syncRes.json();
+      // console.log("SYNC RESULT:", syncData);
+
       sessionStorage.removeItem("code_verifier");
 
       router.replace("/library");
