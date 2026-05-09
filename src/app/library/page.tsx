@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -49,40 +49,53 @@ export default function LibraryPage() {
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [minRating, setMinRating] = useState<number | null>(null);
 
-  const adaptedAlbums = albums.map((a) => ({
-    ...a,
-    genre: "Unknown",
-    subgenre: "",
-    moods: [],
-    rating: 0,
-    eloRating: 0,
-  }));
+  const genres = useMemo(() => {
+    return [...new Set(albums.map((a) => a.genre).filter(Boolean))];
+  }, [albums]);
 
-  const filteredAlbums = adaptedAlbums.filter((album) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      album.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      album.artist.toLowerCase().includes(searchQuery.toLowerCase());
+  const subgenres = useMemo(() => {
+    return [...new Set(albums.map((a) => a.subgenre).filter(Boolean))];
+  }, [albums]);
 
-    const matchesGenre =
-      selectedGenre === null || album.genre === selectedGenre;
+  const moods = useMemo(() => {
+    return [...new Set(albums.flatMap((a) => a.moods ?? []))];
+  }, [albums]);
 
-    const matchesSubgenre =
-      selectedSubgenre === null || album.subgenre === selectedSubgenre;
+  const filteredAlbums = useMemo(() => {
+    return albums.filter((album) => {
+      const matchesSearch =
+        !searchQuery ||
+        album.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        album.artist.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesMood =
-      selectedMood === null || album.moods.includes(selectedMood);
+      const matchesGenre =
+        !selectedGenre || album.genre === selectedGenre;
 
-    const matchesRating = minRating === null || album.rating >= minRating;
+      const matchesSubgenre =
+        !selectedSubgenre || album.subgenre === selectedSubgenre;
 
-    return (
-      matchesSearch &&
-      matchesGenre &&
-      matchesSubgenre &&
-      matchesMood &&
-      matchesRating
-    );
-  });
+      const matchesMood =
+        !selectedMood || (album.moods ?? []).includes(selectedMood);
+
+      const matchesRating =
+        minRating === null || (album.rating ?? 0) >= minRating;
+
+      return (
+        matchesSearch &&
+        matchesGenre &&
+        matchesSubgenre &&
+        matchesMood &&
+        matchesRating
+      );
+    });
+  }, [
+    albums,
+    searchQuery,
+    selectedGenre,
+    selectedSubgenre,
+    selectedMood,
+    minRating,
+  ]);
 
   if (loading) {
     return (
@@ -94,6 +107,7 @@ export default function LibraryPage() {
 
   return (
     <div className="container mx-auto px-4 py-6 md:py-10">
+      {/* HEADER */}
       <div className="mb-8 flex flex-col md:flex-row justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Your Library</h1>
@@ -108,6 +122,7 @@ export default function LibraryPage() {
         </Button>
       </div>
 
+      {/* SEARCH + CONTROLS */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row justify-between">
         <div className="flex flex-1 gap-2">
           <div className="relative flex-1">
@@ -163,6 +178,92 @@ export default function LibraryPage() {
         </div>
       </div>
 
+      {/* FILTERS */}
+      {showFilters && (
+        <Card className="mb-6">
+          <CardContent className="p-4 grid gap-4 sm:grid-cols-3">
+            {/* GENRE */}
+            <Select
+              value={selectedGenre || "all"}
+              onValueChange={(v) =>
+                setSelectedGenre(v === "all" ? null : v)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Genre" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Genres</SelectItem>
+                {genres.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* SUBGENRE */}
+            <Select
+              value={selectedSubgenre || "all"}
+              onValueChange={(v) =>
+                setSelectedSubgenre(v === "all" ? null : v)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Subgenre" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Subgenres</SelectItem>
+                {subgenres.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* MOOD */}
+            <Select
+              value={selectedMood || "all"}
+              onValueChange={(v) =>
+                setSelectedMood(v === "all" ? null : v)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Mood" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Moods</SelectItem>
+                {moods.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* RATING */}
+            <Select
+              value={minRating?.toString() || "all"}
+              onValueChange={(v) =>
+                setMinRating(v === "all" ? null : Number(v))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Min rating" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any rating</SelectItem>
+                <SelectItem value="9">9+</SelectItem>
+                <SelectItem value="8">8+</SelectItem>
+                <SelectItem value="7">7+</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* TABS */}
       <Tabs defaultValue="all" className="mb-6">
         <TabsList>
           <TabsTrigger value="all">All Albums</TabsTrigger>
@@ -170,6 +271,7 @@ export default function LibraryPage() {
         </TabsList>
       </Tabs>
 
+      {/* GRID */}
       {viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {filteredAlbums.map((album) => (
@@ -191,7 +293,13 @@ export default function LibraryPage() {
 
                   <div className="flex justify-between mt-2">
                     <Badge>{album.year}</Badge>
-                    <Star className="h-3 w-3 text-yellow-400" />
+
+                    <div className="flex items-center gap-1">
+                      <Star className="h-3 w-3 fill-primary text-primary" />
+                      <span className="text-xs">
+                        {album.rating ?? "-"}
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

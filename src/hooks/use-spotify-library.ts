@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAllUserAlbums } from "~/lib/spotify/service";
+import { spotifyApi } from "~/lib/spotify/spotify-api";
 import {
   getCachedLibrary,
   setCachedLibrary,
@@ -25,7 +25,7 @@ export function useSpotifyLibrary() {
 
       // 2. FETCH FROM SPOTIFY
       try {
-        const data = await getAllUserAlbums();
+        const data = await spotifyApi.getUserAlbums();
 
         setAlbums(data);
 
@@ -45,7 +45,7 @@ export function useSpotifyLibrary() {
     refresh: async () => {
       setLoading(true);
 
-      const data = await getAllUserAlbums();
+      const data = await spotifyApi.getUserAlbums();
       setAlbums(data);
       setCachedLibrary(data);
 
