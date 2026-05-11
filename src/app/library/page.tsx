@@ -49,34 +49,34 @@ export default function LibraryPage() {
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [minRating, setMinRating] = useState<number | null>(null);
 
+  const [sortBy, setSortBy] = useState<
+    "title" | "artist" | "year" | "added" | "played"
+  >("played");
+
   const genres = useMemo(() => {
     return [...new Set(albums.map((a) => a.genre).filter(Boolean))];
   }, [albums]);
 
   const subgenres = useMemo(() => {
-    return [...new Set(albums.map((a) => a.subgenre).filter(Boolean))];
+    return [...new Set(albums.flatMap((a) => a.subgenres ?? []))];
   }, [albums]);
 
   const moods = useMemo(() => {
     return [...new Set(albums.flatMap((a) => a.moods ?? []))];
   }, [albums]);
 
-  const filteredAlbums = useMemo(() => {
-    return albums.filter((album) => {
+  const sortedAndFilteredAlbums = useMemo(() => {
+    const filtered = albums.filter((album) => {
       const matchesSearch =
         !searchQuery ||
         album.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         album.artist.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesGenre =
-        !selectedGenre || album.genre === selectedGenre;
-
+      const matchesGenre = !selectedGenre || album.genre === selectedGenre;
       const matchesSubgenre =
-        !selectedSubgenre || album.subgenre === selectedSubgenre;
-
+        !selectedSubgenre || album.subgenres?.includes(selectedSubgenre);
       const matchesMood =
         !selectedMood || (album.moods ?? []).includes(selectedMood);
-
       const matchesRating =
         minRating === null || (album.rating ?? 0) >= minRating;
 
@@ -88,6 +88,85 @@ export default function LibraryPage() {
         matchesRating
       );
     });
+
+    const prepareForComparison = (s: string) => {
+      if (!s) return "";
+      const cleaned = s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .trim()
+        .replace(/^(the|a|an)\s+/i, "")
+        .replace(/^[^a-z0-9\u0400-\u04FF\u4E00-\u9FFF]+/i, "");
+
+      if (/^[0-9]/.test(cleaned)) return `0-${cleaned}`;
+      if (/^[a-z]/.test(cleaned)) return `1-${cleaned}`;
+      return `2-${cleaned}`;
+    };
+
+    const toTime = (y?: string) => {
+      if (!y || y === "Unknown") return 0;
+      return new Date(y).getTime();
+    };
+
+    const sorted = [...filtered];
+
+    switch (sortBy) {
+      case "title":
+        sorted.sort((a, b) => {
+          return prepareForComparison(a.title).localeCompare(
+            prepareForComparison(b.title),
+            "en",
+            {
+              sensitivity: "base",
+              numeric: true,
+            },
+          );
+        });
+        break;
+
+      case "artist":
+        sorted.sort((a, b) => {
+          const artistA = prepareForComparison(a.artist);
+          const artistB = prepareForComparison(b.artist);
+          const artistDiff = artistA.localeCompare(artistB, "en", {
+            sensitivity: "base",
+            numeric: true,
+          });
+
+          if (artistDiff === 0) {
+            return toTime(b.year) - toTime(a.year);
+          }
+          return artistDiff;
+        });
+        break;
+
+      case "year":
+        sorted.sort((a, b) => {
+          const dateDiff = toTime(b.year) - toTime(a.year);
+          if (dateDiff !== 0) return dateDiff;
+          return prepareForComparison(a.title).localeCompare(
+            prepareForComparison(b.title),
+            "en",
+            { sensitivity: "base" },
+          );
+        });
+        break;
+
+      case "added":
+        sorted.sort(
+          (a, b) =>
+            new Date(b.addedAt ?? 0).getTime() -
+            new Date(a.addedAt ?? 0).getTime(),
+        );
+        break;
+
+      case "played":
+      default:
+        return filtered;
+    }
+
+    return sorted;
   }, [
     albums,
     searchQuery,
@@ -95,6 +174,7 @@ export default function LibraryPage() {
     selectedSubgenre,
     selectedMood,
     minRating,
+    sortBy,
   ]);
 
   if (loading) {
@@ -108,7 +188,7 @@ export default function LibraryPage() {
   return (
     <div className="container mx-auto px-4 py-6 md:py-10">
       {/* HEADER */}
-      <div className="mb-8 flex flex-col md:flex-row justify-between gap-4">
+      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row">
         <div>
           <h1 className="text-3xl font-bold">Your Library</h1>
           <p className="text-muted-foreground">
@@ -123,7 +203,7 @@ export default function LibraryPage() {
       </div>
 
       {/* SEARCH + CONTROLS */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row justify-between">
+      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row">
         <div className="flex flex-1 gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2 h-4 w-4" />
@@ -146,15 +226,31 @@ export default function LibraryPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                <SlidersHorizontal className="h-4 w-4 mr-1" />
+                <SlidersHorizontal className="mr-1 h-4 w-4" />
                 Sort
-                <ChevronDown className="h-3 w-3 ml-1" />
+                <ChevronDown className="ml-1 h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem>Album Name</DropdownMenuItem>
-              <DropdownMenuItem>Artist</DropdownMenuItem>
-              <DropdownMenuItem>Year</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy("played")}>
+                Recently played
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={() => setSortBy("added")}>
+                Recently added
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={() => setSortBy("title")}>
+                Album Name
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={() => setSortBy("artist")}>
+                Artist
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={() => setSortBy("year")}>
+                Year
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -181,13 +277,11 @@ export default function LibraryPage() {
       {/* FILTERS */}
       {showFilters && (
         <Card className="mb-6">
-          <CardContent className="p-4 grid gap-4 sm:grid-cols-3">
+          <CardContent className="grid gap-4 p-4 sm:grid-cols-3">
             {/* GENRE */}
             <Select
               value={selectedGenre || "all"}
-              onValueChange={(v) =>
-                setSelectedGenre(v === "all" ? null : v)
-              }
+              onValueChange={(v) => setSelectedGenre(v === "all" ? null : v)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Genre" />
@@ -205,9 +299,7 @@ export default function LibraryPage() {
             {/* SUBGENRE */}
             <Select
               value={selectedSubgenre || "all"}
-              onValueChange={(v) =>
-                setSelectedSubgenre(v === "all" ? null : v)
-              }
+              onValueChange={(v) => setSelectedSubgenre(v === "all" ? null : v)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Subgenre" />
@@ -225,9 +317,7 @@ export default function LibraryPage() {
             {/* MOOD */}
             <Select
               value={selectedMood || "all"}
-              onValueChange={(v) =>
-                setSelectedMood(v === "all" ? null : v)
-              }
+              onValueChange={(v) => setSelectedMood(v === "all" ? null : v)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Mood" />
@@ -274,7 +364,7 @@ export default function LibraryPage() {
       {/* GRID */}
       {viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {filteredAlbums.map((album) => (
+          {sortedAndFilteredAlbums.map((album) => (
             <Link href={`/album/${album.id}`} key={album.id}>
               <Card>
                 <Image
@@ -291,14 +381,12 @@ export default function LibraryPage() {
                     {album.artist}
                   </p>
 
-                  <div className="flex justify-between mt-2">
-                    <Badge>{album.year}</Badge>
+                  <div className="mt-2 flex justify-between">
+                    <Badge>{album.year?.slice(0, 4) || "????"}</Badge>
 
                     <div className="flex items-center gap-1">
                       <Star className="h-3 w-3 fill-primary text-primary" />
-                      <span className="text-xs">
-                        {album.rating ?? "-"}
-                      </span>
+                      <span className="text-xs">{album.rating ?? "-"}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -308,9 +396,9 @@ export default function LibraryPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredAlbums.map((album) => (
+          {sortedAndFilteredAlbums.map((album) => (
             <Link href={`/album/${album.id}`} key={album.id}>
-              <Card className="p-3 flex justify-between">
+              <Card className="flex justify-between p-3">
                 <div>
                   <p>{album.title}</p>
                   <p className="text-sm text-muted-foreground">
@@ -318,7 +406,7 @@ export default function LibraryPage() {
                   </p>
                 </div>
 
-                <Badge>{album.year}</Badge>
+                <Badge>{album.year?.slice(0, 4) || "????"}</Badge>
               </Card>
             </Link>
           ))}

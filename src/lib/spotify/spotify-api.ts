@@ -1,4 +1,5 @@
 import { spotifyAuth } from "./spotify-auth";
+import { lastFmApi } from "../lastfm/lastfm-api";
 
 import type {
   SpotifyAlbum,
@@ -15,64 +16,62 @@ export type AppAlbum = {
   cover: string;
   year: string;
   genre: string;
-  subgenre: string | null;
+  subgenres: string[];
+  addedAt: string;
 };
 
 class SpotifyApiService {
   BASE_URL = "https://api.spotify.com/v1";
 
-
   async request<T>(url: string): Promise<T> {
     const token = await spotifyAuth.getAccessToken();
-  
+
     if (!token) {
-      throw new Error("No Spotify access token");
+      throw new Error("No Spotify access token (not authenticated)");
     }
-  
-    console.log("SPOTIFY REQUEST:", {
-      url,
-      tokenPreview: token.slice(0, 20),
-    });
-  
-    const res = await fetch(`${this.BASE_URL}${url}`, {
+
+    let res = await fetch(`${this.BASE_URL}${url}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
-  
+
+    if (res.status === 401) {
+      console.log("TOKEN EXPIRED → refreshing...");
+
+      const newToken = await spotifyAuth.refreshAccessToken();
+
+      if (!newToken) {
+        throw new Error("Unable to refresh token");
+      }
+
+      res = await fetch(`${this.BASE_URL}${url}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${newToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
     const text = await res.text();
-  
-    console.log("SPOTIFY RAW RESPONSE:", {
-      status: res.status,
-      statusText: res.statusText,
-      url,
-      body: text,
-    });
-  
+
     let data: any = null;
-  
+
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
       console.error("FAILED TO PARSE JSON:", text);
     }
-  
+
     if (!res.ok) {
-      console.error("SPOTIFY API ERROR:", {
-        status: res.status,
-        url,
-        headers: Object.fromEntries(res.headers.entries()),
-        data,
-      });
-  
       throw new Error(
-        data?.error?.message ||
-        `Spotify API error ${res.status}`
+        data?.error?.message ?? `Spotify API error ${res.status}`,
       );
     }
-  
+
     return data;
   }
 
@@ -81,47 +80,69 @@ class SpotifyApiService {
   }
 
   async getUserAlbums(): Promise<AppAlbum[]> {
-    const data = await this.request<{
-      items: {
-        album: SpotifyAlbum;
-      }[];
-    }>("/me/albums");
+    let allItems: { album: SpotifyAlbum }[] = [];
 
-    const albums = data.items.map((item) => ({
-      id: item.album.id,
-      title: item.album.name,
-      artist: item.album.artists[0]?.name || "Unknown Artist",
-      artistId: item.album.artists[0]?.id || "",
-      cover: item.album.images?.[0]?.url || "/placeholder.png",
-      year: item.album.release_date?.slice(0, 4) || "Unknown",
-    }));
+    let offset = 0;
+    const limit = 50;
 
-    // FETCH ARTISTS FOR GENRES
-    const artistIds = [
-      ...new Set(albums.map((album) => album.artistId).filter(Boolean)),
-    ];
+    // FETCH ALL SAVED ALBUMS
+    while (true) {
+      const data = await this.request<{
+        items: {
+          album: SpotifyAlbum;
+        }[];
+      }>(`/me/albums?limit=${limit}&offset=${offset}`);
 
-    if (artistIds.length === 0) {
-      return albums.map((album) => ({
-        ...album,
-        genre: "Unknown",
-        subgenre: null,
-      }));
+      allItems = [...allItems, ...data.items];
+
+      if (data.items.length < limit) {
+        break;
+      }
+
+      offset += limit;
     }
 
-    const artists = await this.getSeveralArtists(artistIds);
+    // MAP SPOTIFY DATA
+    const albums = allItems.map((item) => ({
+      id: item.album.id,
+      title: item.album.name,
+      artist: item.album.artists[0]?.name ?? "Unknown Artist",
+      artistId: item.album.artists[0]?.id ?? "",
+      cover: item.album.images?.[0]?.url ?? "/placeholder.png",
+      year: item.album.release_date ?? "Unknown",
+      addedAt: item.added_at,
+    }));
 
-    const artistMap = Object.fromEntries(
-      artists.map((artist) => [artist.id, artist]),
+    // UNIQUE ARTISTS
+    const uniqueArtists = [...new Set(albums.map((album) => album.artist))];
+
+    // FETCH LAST.FM TAGS
+    const artistGenresMap = new Map<string, string[]>();
+
+    await Promise.all(
+      uniqueArtists.map(async (artist) => {
+        try {
+          const tags = await lastFmApi.getArtistTags(artist);
+
+          artistGenresMap.set(artist, tags);
+        } catch (err) {
+          console.error("LAST.FM ERROR:", artist, err);
+
+          artistGenresMap.set(artist, []);
+        }
+      }),
     );
 
+    // ENRICH ALBUMS
     return albums.map((album) => {
-      const artist = artistMap[album.artistId];
+      const tags = artistGenresMap.get(album.artist) ?? [];
 
       return {
         ...album,
-        genre: artist?.genres?.[0] || "Unknown",
-        subgenre: artist?.genres?.[1] || null,
+
+        genre: tags[0] ?? "Unknown",
+
+        subgenres: tags.slice(1),
       };
     });
   }
@@ -131,26 +152,30 @@ class SpotifyApiService {
   }
 
   async getArtist(id: string): Promise<SpotifyArtist> {
-    return this.request<SpotifyArtist>(`/artists/${id}`);
+    const artist = await this.request<SpotifyArtist>(`/artists/${id}`);
+
+    console.log("FULL ARTIST RESPONSE:", artist);
+
+    return artist;
   }
 
   async getSeveralArtists(ids: string[]): Promise<SpotifyArtist[]> {
     const results: SpotifyArtist[] = [];
-  
+
     for (const id of ids) {
       try {
-        console.log("FETCHING ARTIST:", id);
-  
+        // console.log("FETCHING ARTIST:", id);
+
         const artist = await this.getArtist(id);
-  
+
         results.push(artist);
-  
-        console.log("SUCCESS:", id, artist.name);
+
+        // console.log("SUCCESS:", id, artist.name);
       } catch (err) {
         console.error("FAILED ARTIST:", id, err);
       }
     }
-  
+
     return results;
   }
 
@@ -161,12 +186,14 @@ class SpotifyApiService {
   async getAlbumDetails(id: string) {
     const album = await this.getAlbum(id);
 
-    const artistId = album.artists[0]?.id;
+    const artistName = album.artists[0]?.name ?? "Unknown Artist";
 
-    let artist: SpotifyArtist | null = null;
+    let genres: string[] = [];
 
-    if (artistId) {
-      artist = await this.getArtist(artistId);
+    try {
+      genres = await lastFmApi.getArtistTags(artistName);
+    } catch (err) {
+      console.error("LAST.FM ERROR:", artistName, err);
     }
 
     return {
@@ -174,26 +201,24 @@ class SpotifyApiService {
 
       title: album.name,
 
-      artist: album.artists[0]?.name || "Unknown Artist",
+      artist: album.artists[0]?.name ?? "Unknown Artist",
 
-      artistId: artistId || "",
+      cover: album.images?.[0]?.url ?? "/placeholder.png",
 
-      cover: album.images?.[0]?.url || "/placeholder.png",
+      year: album.release_date?.slice(0, 4) ?? "Unknown",
 
-      year: album.release_date?.slice(0, 4) || "Unknown",
+      genre: genres[0] ?? "Unknown",
 
-      genre: artist?.genres?.[0] || "Unknown",
-
-      subgenre: artist?.genres?.[1] || null,
+      subgenres: genres.slice(1),
 
       tracks:
         album.tracks?.items?.map((track) => ({
           id: track.id,
           title: track.name,
           durationMs: track.duration_ms,
-        })) || [],
+        })) ?? [],
 
-      totalTracks: album.total_tracks || 0,
+      totalTracks: album.total_tracks ?? 0,
     };
   }
 }

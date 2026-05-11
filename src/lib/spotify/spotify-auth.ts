@@ -47,6 +47,22 @@ class SpotifyAuthService {
       .replace(/=+$/, "");
   }
 
+  async initAuth() {
+    const token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    const refresh_token = sessionStorage.getItem(REFRESH_TOKEN_KEY);
+    const expiresAt = sessionStorage.getItem(EXPIRES_AT_KEY);
+
+    if (token && expiresAt && Date.now() < Number(expiresAt)) {
+      return token;
+    }
+
+    if (refresh_token) {
+      return await this.refreshAccessToken();
+    }
+
+    return null;
+  }
+
   // =========================
   // LOGIN
   // =========================
@@ -67,19 +83,18 @@ class SpotifyAuthService {
       code_challenge: challenge,
     });
 
-    window.location.href =
-      `https://accounts.spotify.com/authorize?${params.toString()}`;
+    window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
   }
 
   async handleCallback(code: string) {
     const verifier = sessionStorage.getItem(STORAGE_KEY);
 
-    console.log("[PKCE] code:", code);
-    console.log("[PKCE] verifier:", verifier);
+    // console.log("[PKCE] code:", code);
+    // console.log("[PKCE] verifier:", verifier);
 
     if (!verifier) {
       throw new Error(
-        "Missing PKCE code verifier. User must restart login flow."
+        "Missing PKCE code verifier. User must restart login flow.",
       );
     }
 
@@ -103,14 +118,14 @@ class SpotifyAuthService {
     }
 
     const data = JSON.parse(raw);
-    console.log("TOKEN RESPONSE:", data);
+    // console.log("TOKEN RESPONSE:", data);
 
     sessionStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
     sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
 
     sessionStorage.setItem(
       EXPIRES_AT_KEY,
-      String(Date.now() + data.expires_in * 1000)
+      String(Date.now() + data.expires_in * 1000),
     );
 
     sessionStorage.removeItem(STORAGE_KEY);
@@ -127,22 +142,22 @@ class SpotifyAuthService {
     const isExpired = Date.now() >= Number(expiresAt) - 60_000;
 
     if (isExpired) {
-        const newToken = await this.refreshAccessToken();
-      
-        if (!newToken) {
-          return null;
-        }
-      
-        return newToken;
+      const newToken = await this.refreshAccessToken();
+
+      if (!newToken) {
+        return null;
       }
+
+      return newToken;
+    }
 
     return token;
   }
 
   async refreshAccessToken() {
-    const refreshToken = sessionStorage.getItem(REFRESH_TOKEN_KEY);
+    const refresh_token = sessionStorage.getItem(REFRESH_TOKEN_KEY);
 
-    if (!refreshToken) {
+    if (!refresh_token) {
       this.logout();
       return null;
     }
@@ -152,7 +167,7 @@ class SpotifyAuthService {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify({ refresh_token }),
     });
 
     const data = await res.json();
@@ -162,11 +177,16 @@ class SpotifyAuthService {
       throw new Error("Refresh failed");
     }
 
+    // 🔥 single source of truth
     sessionStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
+    sessionStorage.setItem(
+      REFRESH_TOKEN_KEY,
+      data.refresh_token ?? refresh_token,
+    );
 
     sessionStorage.setItem(
       EXPIRES_AT_KEY,
-      String(Date.now() + data.expires_in * 1000)
+      String(Date.now() + data.expires_in * 1000),
     );
 
     return data.access_token;

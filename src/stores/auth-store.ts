@@ -33,7 +33,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      const token = await spotifyAuth.getAccessToken();
+      const token =
+        (await spotifyAuth.initAuth?.()) ??
+        (await spotifyAuth.getAccessToken());
 
       if (!token) {
         set({ user: null, isLoading: false });

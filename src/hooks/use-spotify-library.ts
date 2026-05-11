@@ -6,10 +6,10 @@ import {
   getCachedLibrary,
   setCachedLibrary,
 } from "~/lib/cache/spotify-library-cache";
-import type { Album } from "~/lib/spotify/types";
+import type { AppAlbum } from "~/lib/spotify/spotify-api";
 
 export function useSpotifyLibrary() {
-  const [albums, setAlbums] = useState<Album[]>([]);
+  const [albums, setAlbums] = useState<AppAlbum[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
