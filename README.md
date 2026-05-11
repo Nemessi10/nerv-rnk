@@ -50,9 +50,9 @@ This project aims to offer something no major streaming platform provides — ac
 ## 📄 Roadmap
 
 - [x] Initial dark theme UI
-- [ ] Spotify OAuth2 integration
+- [x] Spotify OAuth2 integration
 - [ ] Album rating functionality (ELO + classic)
-- [ ] Advanced filtering in Library (genre, mood, custom tags)
+- [x] Advanced filtering in Library (genre, mood, custom tags)
 - [ ] Genre and mood tagging (user editable)
 - [ ] Analytics dashboard (top genres, trends, activity)
 - [ ] Mobile-friendly layout
