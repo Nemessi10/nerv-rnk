@@ -1,290 +1,412 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Badge } from "~/components/ui/badge";
 import {
-  ArrowLeft,
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
+  Search,
+  Shuffle,
   Star,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  CheckCircle2,
 } from "lucide-react";
 import { useSpotifyLibrary } from "~/hooks/use-spotify-library";
-import { AppAlbum } from "~/types/album";
+
+type RateMode = "unrated" | "random" | "re-rate";
 
 export default function RatePage() {
   const { albums, loading, refresh } = useSpotifyLibrary();
-  
+
+  // Режими та стани для кожного режиму окремо
+  const [rateMode, setRateMode] = useState<RateMode>("unrated");
+  const [modeIndices, setModeIndices] = useState<Record<RateMode, number>>({
+    unrated: 0,
+    random: 0,
+    "re-rate": 0,
+  });
+
+  // Стан для обраного вручну альбому (тепер він теж прив'язаний до режиму)
+  const [selectedAlbumIds, setSelectedAlbumIds] = useState<
+    Record<RateMode, string | null>
+  >({
+    unrated: null,
+    random: null,
+    "re-rate": null,
+  });
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
   const [currentRating, setCurrentRating] = useState<number>(0);
   const [hoverRating, setHoverRating] = useState<number>(0);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Фільтруємо неоцінені альбоми
-  const unratedAlbums = useMemo(() => {
-    return albums.filter(album => album.rating === undefined || album.rating === null);
-  }, [albums]);
+  const searchRef = useRef<HTMLDivElement>(null);
 
-  const currentAlbum = unratedAlbums[currentIndex];
+  // 1. Фільтрація черги
+  const queue = useMemo(() => {
+    let list = [...albums];
+    if (rateMode === "unrated") {
+      list = list.filter((a) => a.rating === undefined || a.rating === null);
+    } else if (rateMode === "re-rate") {
+      list = list.filter((a) => a.rating !== undefined && a.rating !== null);
+    }
+    return list;
+  }, [albums, rateMode]);
 
-  // Скидаємо рейтинг локально при зміні альбому (додаткова страховка)
+  // 2. Пошук
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return albums.filter(
+      (a) =>
+        a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        a.artist.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [albums, searchQuery]);
+
+  // 3. Поточний альбом (береться з пам'яті поточного режиму)
+  const currentAlbum = useMemo(() => {
+    const selectedId = selectedAlbumIds[rateMode];
+    if (selectedId) {
+      return (
+        albums.find((a) => a.id === selectedId) ??
+        queue[modeIndices[rateMode]] ??
+        queue[0]
+      );
+    }
+    return queue[modeIndices[rateMode]] ?? queue[0];
+  }, [queue, rateMode, modeIndices, selectedAlbumIds, albums]);
+
+  // Оновлюємо рейтинг при зміні альбому
   useEffect(() => {
-    setCurrentRating(0);
-    setHoverRating(0);
-  }, [currentIndex, currentAlbum?.id]);
+    if (currentAlbum) {
+      setCurrentRating(currentAlbum.rating ?? 0);
+    }
+  }, [currentAlbum]);
 
-  const handleNextAlbum = () => {
-    setCurrentIndex((prev) => (prev < unratedAlbums.length - 1 ? prev + 1 : 0));
+  const updateIndex = (newIndex: number) => {
+    setSelectedAlbumIds((prev) => ({ ...prev, [rateMode]: null }));
+    setModeIndices((prev) => ({ ...prev, [rateMode]: newIndex }));
   };
 
-  const handlePrevAlbum = () => {
-    setCurrentIndex((prev) => (prev > 0 ? prev - 1 : unratedAlbums.length - 1));
+  const handleRandomize = () => {
+    if (queue.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * queue.length);
+    updateIndex(randomIndex);
   };
 
   const handleSaveRating = async () => {
-    if (!currentAlbum || currentRating === 0) return;
+    if (!currentAlbum || (currentRating === 0 && hoverRating === 0)) return;
+    const finalScore = hoverRating > 0 ? hoverRating : currentRating;
 
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/ratings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          album: currentAlbum,
-          rating: currentRating,
-        }),
+        body: JSON.stringify({ album: currentAlbum, rating: finalScore }),
       });
-
       if (res.ok) {
         await refresh();
-        // Якщо це був останній альбом у списку, скидаємо індекс на 0
-        if (currentIndex >= unratedAlbums.length - 1) {
-          setCurrentIndex(0);
-        }
       }
     } catch (err) {
-      console.error("Failed to save rating:", err);
+      console.error(err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (loading) {
+  if (loading && albums.length === 0)
     return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin" />
       </div>
     );
-  }
-
-  if (unratedAlbums.length === 0) {
-    return (
-      <div className="flex h-[60vh] flex-col items-center justify-center text-center">
-        <h2 className="text-2xl font-bold">No more albums to rate!</h2>
-        <p className="text-muted-foreground mt-2">You've rated everything in your library.</p>
-        <Button asChild className="mt-6">
-          <Link href="/library">Back to Library</Link>
-        </Button>
-      </div>
-    );
-  }
 
   return (
-    <div className="container mx-auto px-4 py-6 md:py-8">
-      <div className="mb-6 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Rate Albums</h1>
-          <p className="text-muted-foreground">
-            {unratedAlbums.length} albums waiting for your score
-          </p>
+    <div className="container mx-auto max-w-7xl px-4 py-8">
+      {/* MINIMALIST TABS & HEADER */}
+      <div className="mb-12 flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-black tracking-tighter">
+            RATING STUDIO
+          </h1>
+          <div className="flex items-center gap-4">
+            <Tabs defaultValue="classic" className="w-auto">
+              <TabsList className="h-7 border border-border/40 bg-secondary/20 p-1">
+                <TabsTrigger
+                  value="classic"
+                  className="px-2 text-[9px] font-bold uppercase"
+                >
+                  Classic
+                </TabsTrigger>
+                <TabsTrigger
+                  value="elo"
+                  className="px-2 text-[9px] font-bold uppercase"
+                >
+                  Elo
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              {rateMode} Mode — {queue.length} left
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-1.5 rounded-xl border border-border/40 bg-secondary/15 p-1">
+          {[
+            { id: "unrated", label: "Unrated", icon: Star },
+            { id: "random", label: "Random", icon: Shuffle },
+            { id: "re-rate", label: "Re-rate", icon: CheckCircle2 },
+          ].map((mode) => (
+            <Button
+              key={mode.id}
+              variant={rateMode === mode.id ? "default" : "ghost"}
+              className="h-8 gap-2 rounded-lg px-3 transition-all"
+              onClick={() => setRateMode(mode.id as RateMode)}
+            >
+              <mode.icon className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-black uppercase">
+                {mode.label}
+              </span>
+            </Button>
+          ))}
         </div>
       </div>
 
-      <Tabs defaultValue="classic" className="mb-4">
-        <TabsList className="tab-no-border grid w-full grid-cols-2 bg-secondary/30">
-          <TabsTrigger
-            value="classic"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
-            Classic Rating
-          </TabsTrigger>
-          <TabsTrigger
-            value="elo"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
-            Elo Comparison
-          </TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 gap-12 xl:grid-cols-12">
+        {/* LEFT COLUMN: CANVAS */}
+        <div className="xl:col-span-7">
+          <div className="group relative aspect-square">
+            <Card className="h-full overflow-hidden rounded-[32px] border-0 bg-transparent shadow-none">
+              {currentAlbum && (
+                <Image
+                  src={currentAlbum.cover}
+                  alt={currentAlbum.title}
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              )}
 
-        <TabsContent value="classic" className="mt-4">
-          <div className="mx-auto max-w-5xl">
-            <div className="flex flex-col md:flex-row md:items-start md:gap-6 lg:gap-8">
-              {/* LEFT: ALBUM COVER CARD */}
-              <div className="mb-4 md:mb-0 md:flex-1">
-                <Card className="card-no-border glow-primary overflow-hidden bg-card">
-                  <div className="relative aspect-square w-full overflow-hidden">
-                    <Image
-                      src={currentAlbum.cover || "/placeholder.svg"}
-                      alt={currentAlbum.title}
-                      fill
-                      className="object-cover"
-                      priority
-                    />
+              <div className="absolute inset-0 flex items-center justify-between px-6 opacity-0 transition-opacity group-hover:opacity-100">
+                <Button
+                  variant="black/40"
+                  size="icon"
+                  className="h-12 w-12 rounded-full backdrop-blur-md"
+                  onClick={() =>
+                    updateIndex(
+                      modeIndices[rateMode] > 0
+                        ? modeIndices[rateMode] - 1
+                        : queue.length - 1,
+                    )
+                  }
+                >
+                  <ChevronLeft className="h-6 w-6 text-white" />
+                </Button>
+                <Button
+                  variant="black/40"
+                  size="icon"
+                  className="h-12 w-12 rounded-full backdrop-blur-md"
+                  onClick={() =>
+                    updateIndex(
+                      modeIndices[rateMode] < queue.length - 1
+                        ? modeIndices[rateMode] + 1
+                        : 0,
+                    )
+                  }
+                >
+                  <ChevronRight className="h-6 w-6 text-white" />
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: CONTROLS */}
+        <div className="flex flex-col justify-center space-y-8 xl:col-span-5">
+          {/* SEARCH */}
+          <div className="relative" ref={searchRef}>
+            <div
+              className={`flex items-center gap-3 rounded-xl border bg-secondary/30 px-4 py-3 transition-all ${isSearchFocused ? "border-primary" : "border-transparent"}`}
+            >
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Jump to album..."
+                className="w-full border-0 bg-transparent text-sm font-medium outline-none"
+                value={searchQuery}
+                onFocus={() => setIsSearchFocused(true)}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {isSearchFocused && searchResults.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl backdrop-blur-xl">
+                <div className="max-h-[280px] overflow-y-auto">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-primary/5"
+                      onClick={() => {
+                        setSelectedAlbumIds((prev) => ({
+                          ...prev,
+                          [rateMode]: result.id,
+                        }));
+                        setSearchQuery("");
+                        setIsSearchFocused(false);
+                      }}
+                    >
+                      <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg">
+                        <Image
+                          src={result.cover}
+                          alt=""
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-bold">
+                          {result.title}
+                        </p>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {result.artist} • {result.year.slice(0, 4)}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {currentAlbum ? (
+            <div className="space-y-6">
+              {/* META INFO */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Badge
+                    variant="outline"
+                    className="border-primary/20 py-0.5 text-[10px] font-bold uppercase text-primary"
+                  >
+                    {currentAlbum.genre}
+                  </Badge>
+                  {rateMode === "random" && (
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90"
-                      onClick={handlePrevAlbum}
+                      size="sm"
+                      onClick={handleRandomize}
+                      className="h-7 gap-2 text-[10px] font-bold uppercase"
                     >
-                      <ChevronLeft className="h-8 w-8" />
+                      <Shuffle className="h-3 w-3" /> Shuffle
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90"
-                      onClick={handleNextAlbum}
-                    >
-                      <ChevronRight className="h-8 w-8" />
-                    </Button>
-                  </div>
-                </Card>
+                  )}
+                </div>
+
+                <div className="flex h-[120px] flex-col justify-center">
+                  <h2 className="mb-1 line-clamp-2 text-4xl font-black leading-tight tracking-tighter">
+                    {currentAlbum.title}
+                  </h2>
+                  <p className="truncate text-lg font-bold text-muted-foreground">
+                    {currentAlbum.artist}{" "}
+                    <span className="mx-2 text-primary/30">•</span>{" "}
+                    <span className="text-primary/60">
+                      {currentAlbum.year.slice(0, 4)}
+                    </span>
+                  </p>
+                </div>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-9 gap-2 rounded-lg px-4 text-xs font-bold"
+                  asChild
+                >
+                  <Link href={`/album/${currentAlbum.id}`}>
+                    <ExternalLink className="h-3.5 w-3.5" /> View Details
+                  </Link>
+                </Button>
               </div>
 
-              {/* RIGHT: RATING CONTROLS */}
-              <div className="md:w-[370px]">
-                <Card className="card-no-border bg-card">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="line-clamp-1">
-                      {currentAlbum.title}
-                    </CardTitle>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground text-sm line-clamp-1 flex-1 mr-2">
-                        {currentAlbum.artist}
-                      </span>
-                      <Badge variant="outline" className="border-0 bg-secondary/50">
-                        {currentAlbum.genre}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  
-                  {/* Ключ дозволяє скидати стан всього блоку при зміні альбому */}
-                  <CardContent key={currentAlbum.id}>
-                    <div className="space-y-4">
-                      <div>
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Your Rating
-                          </span>
-                          <span className="text-2xl font-bold text-accent">
-                            {currentRating > 0 ? currentRating.toFixed(1) : "-"}
-                          </span>
-                        </div>
-                        
-                        {/* STAR INTERFACE */}
-                        <div className="flex flex-wrap justify-center py-2">
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => (
-                            <button
-                              key={rating}
-                              className="p-1 transition-transform hover:scale-110"
-                              onMouseEnter={() => setHoverRating(rating)}
-                              onMouseLeave={() => setHoverRating(0)}
-                              onClick={() => setCurrentRating(rating)}
-                            >
-                              <Star
-                                className={`h-6 w-6 ${
-                                  (hoverRating || currentRating) >= rating
-                                    ? "fill-accent text-accent"
-                                    : "text-muted-foreground/30"
-                                } transition-all`}
-                              />
-                            </button>
-                          ))}
-                        </div>
+              {/* RATING DASHBOARD */}
+              <div className="space-y-6 rounded-[24px] border border-border/40 bg-secondary/10 p-8">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
+                    Current Score
+                  </span>
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-5xl font-black tracking-tighter text-primary">
+                      {(hoverRating > 0 ? hoverRating : currentRating) || 0}
+                    </span>
+                    <span className="text-2xl font-black text-muted-foreground/20">
+                      /10
+                    </span>
+                  </div>
+                </div>
 
-                        {/* PRECISION SLIDER */}
-                        <input
-                          type="range"
-                          min="0"
-                          max="10"
-                          step="0.1"
-                          value={currentRating}
-                          onChange={(e) =>
-                            setCurrentRating(parseFloat(e.target.value))
-                          }
-                          className="rating-slider h-2 w-full appearance-none rounded-full bg-secondary/30 accent-accent"
-                        />
-                        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground uppercase tracking-widest">
-                          <span>0</span>
-                          <span>5</span>
-                          <span>10</span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={handlePrevAlbum}
-                          className="btn-no-border hover:bg-secondary/20"
-                        >
-                          <ChevronLeft className="mr-2 h-4 w-4" />
-                          Previous
-                        </Button>
-                        <Button
-                          onClick={handleSaveRating}
-                          disabled={currentRating === 0 || isSubmitting}
-                          className="btn-no-border bg-accent hover:bg-accent/90 text-accent-foreground"
-                        >
-                          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm"}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-
-                  <CardFooter className="flex justify-between pt-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-primary hover:bg-primary/10"
-                      asChild
+                <div className="flex items-center justify-between px-1">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
+                    <button
+                      key={s}
+                      className="transition-transform active:scale-75"
+                      onMouseEnter={() => setHoverRating(s)}
+                      onMouseLeave={() => setHoverRating(0)}
+                      onClick={() => setCurrentRating(s)}
                     >
-                      <Link href={`/album/${currentAlbum.id}`}>
-                        View Details
-                      </Link>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleNextAlbum}
-                      className="btn-no-border hover:bg-secondary/20"
-                    >
-                      Skip
-                    </Button>
-                  </CardFooter>
-                </Card>
+                      <Star
+                        className={`h-7 w-7 transition-all duration-200 ${
+                          (hoverRating || currentRating) >= s
+                            ? "fill-primary text-primary drop-shadow-[0_0_8px_rgba(var(--primary),0.4)]"
+                            : "text-muted-foreground/10"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  value={hoverRating > 0 ? hoverRating : currentRating}
+                  onChange={(e) => setCurrentRating(parseFloat(e.target.value))}
+                  className="h-1 w-full cursor-pointer appearance-none rounded-full bg-secondary accent-primary"
+                />
+
+                <Button
+                  className="h-12 w-full rounded-xl bg-primary text-sm font-black transition-all hover:bg-primary/90"
+                  disabled={
+                    isSubmitting || (currentRating === 0 && hoverRating === 0)
+                  }
+                  onClick={handleSaveRating}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    "CONFIRM"
+                  )}
+                </Button>
               </div>
             </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="elo" className="mt-4">
-           {/* Твоя заглушка для Elo Comparison залишається як була */}
-           <div className="flex h-[40vh] items-center justify-center text-muted-foreground border-2 border-dashed rounded-xl">
-              Elo Ranking logic coming soon...
-           </div>
-        </TabsContent>
-      </Tabs>
+          ) : (
+            <div className="rounded-[24px] border border-dashed border-border bg-secondary/5 py-20 text-center">
+              <p className="text-sm font-bold uppercase text-muted-foreground">
+                Nothing to rate
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
