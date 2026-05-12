@@ -1,3 +1,5 @@
+import Cookies from "js-cookie";
+
 const CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID!;
 const REDIRECT_URI = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI!;
 
@@ -5,6 +7,7 @@ const STORAGE_KEY = "spotify_pkce_verifier";
 const ACCESS_TOKEN_KEY = "spotify_access_token";
 const REFRESH_TOKEN_KEY = "spotify_refresh_token";
 const EXPIRES_AT_KEY = "spotify_expires_at";
+const COOKIE_ACCESS_TOKEN = "spotify_at";
 
 const SCOPES = [
   "user-read-email",
@@ -122,11 +125,22 @@ class SpotifyAuthService {
 
     sessionStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
     sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
-
     sessionStorage.setItem(
       EXPIRES_AT_KEY,
       String(Date.now() + data.expires_in * 1000),
     );
+
+    Cookies.set(COOKIE_ACCESS_TOKEN, data.access_token, { expires: 1 / 24 });
+
+    await fetch("/api/auth/sync-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        accessToken: data.access_token,
+      }),
+    });
 
     sessionStorage.removeItem(STORAGE_KEY);
 
@@ -134,6 +148,14 @@ class SpotifyAuthService {
   }
 
   async getAccessToken() {
+    // ПЕРЕВІРКА НА СЕРВЕР
+    if (typeof window === "undefined") {
+      // Якщо ми на сервері, читаємо з cookies (через next/headers у роутах)
+      // Але оскільки цей клас - синглтон для всього додатка,
+      // ми повернемо null тут і обробимо це в API роуті.
+      return null;
+    }
+
     const token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
     const expiresAt = sessionStorage.getItem(EXPIRES_AT_KEY);
 
@@ -164,35 +186,35 @@ class SpotifyAuthService {
 
     const res = await fetch("/api/auth/spotify/refresh", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token }),
     });
-
-    const data = await res.json();
 
     if (!res.ok) {
       this.logout();
       throw new Error("Refresh failed");
     }
 
-    // 🔥 single source of truth
-    sessionStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
-    sessionStorage.setItem(
-      REFRESH_TOKEN_KEY,
-      data.refresh_token ?? refresh_token,
-    );
+    const data = await res.json();
+    const newToken = data.access_token;
 
-    sessionStorage.setItem(
-      EXPIRES_AT_KEY,
-      String(Date.now() + data.expires_in * 1000),
-    );
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(ACCESS_TOKEN_KEY, newToken);
+      sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token ?? refresh_token);
+      sessionStorage.setItem(EXPIRES_AT_KEY, String(Date.now() + data.expires_in * 1000));
+      
+      Cookies.set(COOKIE_ACCESS_TOKEN, newToken, { expires: 1 / 24 });
+    }
 
-    return data.access_token;
+    return newToken;
   }
 
   logout() {
+    if (typeof window !== "undefined") {
+      sessionStorage.clear();
+      Cookies.remove(COOKIE_ACCESS_TOKEN);
+    }
+
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     sessionStorage.removeItem(EXPIRES_AT_KEY);

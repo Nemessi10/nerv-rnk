@@ -1,67 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { db } from "~/server/db";
 import { users } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
   try {
     const { accessToken } = await req.json();
 
     if (!accessToken) {
-      return NextResponse.json(
-        { error: "Missing accessToken" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Missing accessToken" }, { status: 400 });
     }
 
     const spotifyRes = await fetch("https://api.spotify.com/v1/me", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!spotifyRes.ok) {
-      return NextResponse.json(
-        { error: "Failed to fetch Spotify profile" },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: "Failed to fetch Spotify profile" }, { status: 401 });
     }
 
     const spotifyUser = await spotifyRes.json();
-
     const spotifyId = spotifyUser.id;
     const displayName = spotifyUser.display_name;
 
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.spotifyId, spotifyId))
-      .limit(1);
+    const cookieStore = await cookies();
+    cookieStore.set("spotify_user_id", spotifyId, {
+      maxAge: 60 * 60 * 24 * 30,
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+    });
 
-    if (existingUser.length === 0) {
-      // CREATE
-      await db.insert(users).values({
-        id: crypto.randomUUID(),
+    await db
+      .insert(users)
+      .values({
         spotifyId,
         displayName,
-      });
-    } else {
-      // UPDATE
-      await db
-        .update(users)
-        .set({
+      })
+      .onConflictDoUpdate({
+        target: users.spotifyId,
+        set: {
           displayName,
-        })
-        .where(eq(users.spotifyId, spotifyId));
-    }
+        },
+      });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      spotifyId,
+    });
   } catch (err) {
     console.error("SYNC USER ERROR:", err);
-
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -7,24 +7,24 @@ import type {
   SpotifyTrack,
   SpotifyUser,
 } from "~/types/spotify";
-
-export type AppAlbum = {
-  id: string;
-  title: string;
-  artist: string;
-  artistId: string;
-  cover: string;
-  year: string;
-  genre: string;
-  subgenres: string[];
-  addedAt: string;
-};
+import type { AppAlbum } from "~/types/album";
 
 class SpotifyApiService {
   BASE_URL = "https://api.spotify.com/v1";
 
+  private serverUserCache: SpotifyUser | null = null;
+  private clientUserCache: SpotifyUser | null = null;
+
   async request<T>(url: string): Promise<T> {
-    const token = await spotifyAuth.getAccessToken();
+    let token: string | null = null;
+
+    if (typeof window === "undefined") {
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      token = cookieStore.get("spotify_at")?.value ?? null;
+    } else {
+      token = await spotifyAuth.getAccessToken();
+    }
 
     if (!token) {
       throw new Error("No Spotify access token (not authenticated)");
@@ -39,20 +39,11 @@ class SpotifyApiService {
     });
 
     if (res.status === 401) {
-      console.log("TOKEN EXPIRED → refreshing...");
-
       const newToken = await spotifyAuth.refreshAccessToken();
-
-      if (!newToken) {
-        throw new Error("Unable to refresh token");
-      }
-
+      if (!newToken) throw new Error("Unable to refresh token");
       res = await fetch(`${this.BASE_URL}${url}`, {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${newToken}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${newToken}`, "Content-Type": "application/json" },
       });
     }
 
@@ -67,38 +58,38 @@ class SpotifyApiService {
     }
 
     if (!res.ok) {
-      throw new Error(
-        data?.error?.message ?? `Spotify API error ${res.status}`,
-      );
+      if (res.status === 429) throw new Error("Spotify API error 429: Too Many Requests");
+      throw new Error(data?.error?.message ?? `Spotify API error ${res.status}`);
     }
 
     return data;
   }
 
   async getCurrentUser(): Promise<SpotifyUser> {
-    return this.request<SpotifyUser>("/me");
+    if (typeof window === "undefined") {
+      if (this.serverUserCache) return this.serverUserCache;
+      const data = await this.request<SpotifyUser>("/me");
+      this.serverUserCache = data;
+      return data;
+    }
+
+    if (this.clientUserCache) return this.clientUserCache;
+    const data = await this.request<SpotifyUser>("/me");
+    this.clientUserCache = data;
+    return data;
   }
 
   async getUserAlbums(): Promise<AppAlbum[]> {
-    let allItems: { album: SpotifyAlbum }[] = [];
+    let allItems: { album: SpotifyAlbum; added_at: string }[] = [];
 
     let offset = 0;
     const limit = 50;
 
     // FETCH ALL SAVED ALBUMS
     while (true) {
-      const data = await this.request<{
-        items: {
-          album: SpotifyAlbum;
-        }[];
-      }>(`/me/albums?limit=${limit}&offset=${offset}`);
-
+      const data = await this.request<{ items: any[] }>(`/me/albums?limit=${limit}&offset=${offset}`);
       allItems = [...allItems, ...data.items];
-
-      if (data.items.length < limit) {
-        break;
-      }
-
+      if (data.items.length < limit) break;
       offset += limit;
     }
 
@@ -123,14 +114,11 @@ class SpotifyApiService {
       uniqueArtists.map(async (artist) => {
         try {
           const tags = await lastFmApi.getArtistTags(artist);
-
           artistGenresMap.set(artist, tags);
-        } catch (err) {
-          console.error("LAST.FM ERROR:", artist, err);
-
+        } catch {
           artistGenresMap.set(artist, []);
         }
-      }),
+      })
     );
 
     // ENRICH ALBUMS
@@ -145,6 +133,11 @@ class SpotifyApiService {
         subgenres: tags.slice(1),
       };
     });
+  }
+
+  clearCache() {
+    this.serverUserCache = null;
+    this.clientUserCache = null;
   }
 
   async getAlbum(id: string): Promise<SpotifyAlbum> {

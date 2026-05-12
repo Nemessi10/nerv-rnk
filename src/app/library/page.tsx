@@ -36,6 +36,7 @@ import {
 } from "~/components/ui/select";
 
 import { useSpotifyLibrary } from "~/hooks/use-spotify-library";
+import type { AppAlbum } from "~/types/album";
 
 export default function LibraryPage() {
   const { albums, loading } = useSpotifyLibrary();
@@ -364,7 +365,7 @@ export default function LibraryPage() {
       {/* GRID */}
       {viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {sortedAndFilteredAlbums.map((album) => (
+          {sortedAndFilteredAlbums.map((album: AppAlbum) => (
             <Link href={`/album/${album.id}`} key={album.id}>
               <Card>
                 <Image
@@ -386,7 +387,7 @@ export default function LibraryPage() {
 
                     <div className="flex items-center gap-1">
                       <Star className="h-3 w-3 fill-primary text-primary" />
-                      <span className="text-xs">{album.rating ?? "-"}</span>
+                      <span className="text-xs">{typeof album.rating === 'number' ? album.rating.toFixed(1) : "-"}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -396,7 +397,7 @@ export default function LibraryPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {sortedAndFilteredAlbums.map((album) => (
+          {sortedAndFilteredAlbums.map((album: AppAlbum) => (
             <Link href={`/album/${album.id}`} key={album.id}>
               <Card className="flex justify-between p-3">
                 <div>

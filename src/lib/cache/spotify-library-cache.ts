@@ -1,14 +1,14 @@
-import type { Album } from "~/lib/spotify/types";
+import type { AppAlbum } from "~/types/album";
 
 const CACHE_KEY = "spotify_library_cache_v1";
 const CACHE_TTL = 1000 * 60 * 60 * 24; // 24h
 
 type CachedData = {
   timestamp: number;
-  data: Album[];
+  data: AppAlbum[];
 };
 
-export const getCachedLibrary = (): Album[] | null => {
+export const getCachedLibrary = (): AppAlbum[] | null => {
   if (typeof window === "undefined") return null;
 
   const raw = sessionStorage.getItem(CACHE_KEY);
@@ -30,7 +30,7 @@ export const getCachedLibrary = (): Album[] | null => {
   }
 };
 
-export const setCachedLibrary = (data: Album[]) => {
+export const setCachedLibrary = (data: AppAlbum[]) => {
   if (typeof window === "undefined") return;
 
   const payload: CachedData = {
