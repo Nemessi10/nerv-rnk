@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { spotifyApi } from "~/lib/spotify/spotify-api";
-import {
-  getCachedLibrary,
-  setCachedLibrary,
-} from "~/lib/cache/spotify-library-cache";
+import { getCachedLibrary, setCachedLibrary } from "~/lib/cache/spotify-library-cache";
 import type { AppAlbum } from "~/types/album";
 
 export function useSpotifyLibrary() {
@@ -16,24 +12,20 @@ export function useSpotifyLibrary() {
   const fetchFullLibrary = async (showLoading = true) => {
     if (isFetching.current) return;
     isFetching.current = true;
-
+  
     if (showLoading) setLoading(true);
-
+  
     try {
-      const [spotifyAlbums, ratingsRes] = await Promise.all([
-        spotifyApi.getUserAlbums(),
-        fetch("/api/ratings/user").then((res) => (res.ok ? res.json() : [])),
-      ]);
-
-      const ratingsMap = new Map(
-        ratingsRes.map((r: any) => [r.albumSpotifyId, r.rating]),
-      );
-
-      const enrichedAlbums = spotifyAlbums.map((album) => ({
-        ...album,
-        rating: ratingsMap.get(album.id),
-      }));
-
+      // ВАЖЛИВО: Запускаємо фоном, БЕЗ await! 
+      // Бекенд почне оновлювати базу, але фронтенд не чекає на нього
+      void fetch("/api/library/sync", { method: "POST" });
+  
+      // Одразу беремо те, що є в базі — це займе всього ~160мс
+      const res = await fetch("/api/ratings/user");
+      if (!res.ok) throw new Error("Failed to fetch library");
+      
+      const enrichedAlbums: AppAlbum[] = await res.json();
+  
       setAlbums(enrichedAlbums);
       setCachedLibrary(enrichedAlbums);
     } catch (error) {
@@ -49,9 +41,9 @@ export function useSpotifyLibrary() {
     if (cached) {
       setAlbums(cached);
       setLoading(false);
-      void fetchFullLibrary(false);
+      void fetchFullLibrary(false); // Фонове оновлення без лоадера
     } else {
-      void fetchFullLibrary(true);
+      void fetchFullLibrary(true);  // Перше завантаження з лоадером
     }
   }, []);
 

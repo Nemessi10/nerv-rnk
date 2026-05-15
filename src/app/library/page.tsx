@@ -50,9 +50,9 @@ export default function LibraryPage() {
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [minRating, setMinRating] = useState<number | null>(null);
 
-  const [sortBy, setSortBy] = useState<
-    "title" | "artist" | "year" | "added" | "played"
-  >("played");
+  const [sortBy, setSortBy] = useState<"title" | "artist" | "year" | "elo">(
+    "elo",
+  );
 
   const genres = useMemo(() => {
     return [...new Set(albums.map((a) => a.genre).filter(Boolean))];
@@ -105,7 +105,7 @@ export default function LibraryPage() {
       return `2-${cleaned}`;
     };
 
-    const toTime = (y?: string) => {
+    const toTime = (y?: string | null) => {
       if (!y || y === "Unknown") return 0;
       return new Date(y).getTime();
     };
@@ -118,10 +118,7 @@ export default function LibraryPage() {
           return prepareForComparison(a.title).localeCompare(
             prepareForComparison(b.title),
             "en",
-            {
-              sensitivity: "base",
-              numeric: true,
-            },
+            { sensitivity: "base", numeric: true },
           );
         });
         break;
@@ -154,17 +151,10 @@ export default function LibraryPage() {
         });
         break;
 
-      case "added":
-        sorted.sort(
-          (a, b) =>
-            new Date(b.addedAt ?? 0).getTime() -
-            new Date(a.addedAt ?? 0).getTime(),
-        );
-        break;
-
-      case "played":
+      case "elo":
       default:
-        return filtered;
+        sorted.sort((a, b) => (b.eloRating ?? 1000) - (a.eloRating ?? 1000));
+        break;
     }
 
     return sorted;
@@ -233,12 +223,8 @@ export default function LibraryPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setSortBy("played")}>
-                Recently played
-              </DropdownMenuItem>
-
-              <DropdownMenuItem onClick={() => setSortBy("added")}>
-                Recently added
+              <DropdownMenuItem onClick={() => setSortBy("elo")}>
+                Elo Rating (Top)
               </DropdownMenuItem>
 
               <DropdownMenuItem onClick={() => setSortBy("title")}>
@@ -278,7 +264,7 @@ export default function LibraryPage() {
       {/* FILTERS */}
       {showFilters && (
         <Card className="mb-6">
-          <CardContent className="grid gap-4 p-4 sm:grid-cols-3">
+          <CardContent className="grid gap-4 p-4 sm:grid-cols-4">
             {/* GENRE */}
             <Select
               value={selectedGenre || "all"}
@@ -362,32 +348,51 @@ export default function LibraryPage() {
         </TabsList>
       </Tabs>
 
-      {/* GRID */}
+      {/* GRID VIEW */}
       {viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {sortedAndFilteredAlbums.map((album: AppAlbum) => (
             <Link href={`/album/${album.id}`} key={album.id}>
-              <Card>
-                <Image
-                  src={album.cover || "/placeholder.svg"}
-                  alt={album.title}
-                  width={300}
-                  height={300}
-                  className="w-full"
-                />
+              <Card className="flex h-full flex-col justify-between overflow-hidden">
+                <div>
+                  <div className="relative aspect-square w-full bg-muted">
+                    <Image
+                      src={album.cover || "/placeholder.svg"}
+                      alt={album.title}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
 
-                <CardContent className="p-3">
-                  <h3>{album.title}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {album.artist}
-                  </p>
+                  <CardContent className="p-3 pb-0">
+                    {/* ПОВЕРНУТО ЗРУЧНИЙ ТЕКСТОВИЙ РОЗМІР ТА ШРИФТИ */}
+                    <h3 className="line-clamp-1 text-base font-bold">
+                      {album.title}
+                    </h3>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {album.artist}
+                    </p>
+                  </CardContent>
+                </div>
 
-                  <div className="mt-2 flex justify-between">
-                    <Badge>{album.year?.slice(0, 4) || "????"}</Badge>
+                <CardContent className="p-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary" className="text-[10px]">
+                      {album.year ? album.year.slice(0, 4) : "—"}
+                    </Badge>
 
-                    <div className="flex items-center gap-1">
-                      <Star className="h-3 w-3 fill-primary text-primary" />
-                      <span className="text-xs">{typeof album.rating === 'number' ? album.rating.toFixed(1) : "-"}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="rounded bg-secondary/40 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                        {album.eloRating ?? 1000} E
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Star className="h-3 w-3 fill-primary text-primary" />
+                        <span className="text-sm font-bold">
+                          {typeof album.rating === "number"
+                            ? album.rating.toFixed(1)
+                            : "—"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -396,18 +401,47 @@ export default function LibraryPage() {
           ))}
         </div>
       ) : (
+        /* LIST VIEW */
         <div className="space-y-2">
           {sortedAndFilteredAlbums.map((album: AppAlbum) => (
             <Link href={`/album/${album.id}`} key={album.id}>
-              <Card className="flex justify-between p-3">
-                <div>
-                  <p>{album.title}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {album.artist}
-                  </p>
+              <Card className="flex items-center justify-between p-3 transition-colors hover:bg-muted/40">
+                <div className="flex items-center gap-3">
+                  <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-muted">
+                    <Image
+                      src={album.cover || "/placeholder.svg"}
+                      alt=""
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                  <div>
+                    {/* ПОВЕРНУТО ТЕКСТОВИЙ РОЗМІР ДЛЯ СПИСКУ */}
+                    <p className="line-clamp-1 text-base font-bold">
+                      {album.title}
+                    </p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {album.artist}
+                    </p>
+                  </div>
                 </div>
 
-                <Badge>{album.year?.slice(0, 4) || "????"}</Badge>
+                <div className="flex items-center gap-4">
+                  <span className="rounded bg-secondary px-2 py-0.5 text-xs font-bold text-muted-foreground">
+                    {album.eloRating ?? 1000} Elo
+                  </span>
+                  {typeof album.rating === "number" && (
+                    <div className="flex items-center gap-1">
+                      <Star className="h-3 w-3 fill-primary text-primary" />
+                      <span className="text-sm font-bold">
+                        {album.rating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  <Badge className="text-[10px]">
+                    {album.year ? album.year.slice(0, 4) : "—"}
+                  </Badge>
+                </div>
               </Card>
             </Link>
           ))}

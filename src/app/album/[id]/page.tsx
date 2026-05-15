@@ -40,17 +40,20 @@ export default function AlbumDetailPage({
         const spotifyData = await spotifyApi.getAlbumDetails(albumId);
         
         const ratingRes = await fetch(`/api/ratings/${albumId}`).catch(() => null);
-        let dbRating = undefined;
+        let dbRating = null;
+        let dbEloRating = 1000;
 
         if (ratingRes?.ok) {
           const ratingData = await ratingRes.json();
           dbRating = ratingData.rating;
+          dbEloRating = ratingData.eloRating;
         }
 
         if (isMounted) {
           setAlbum({
             ...(spotifyData as any),
             rating: dbRating,
+            eloRating: dbEloRating,
           });
         }
       } catch (err) {
@@ -123,10 +126,10 @@ export default function AlbumDetailPage({
             <div className="flex items-center gap-2 text-muted-foreground">
               <p>{album.artist}</p>
               <span>•</span>
-              <p>{album.year}</p>
+              <p>{album.year ? album.year.slice(0, 4) : "—"}</p>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Badge className="capitalize">{album.genre}</Badge>
+              <Badge className="capitalize">{album.genre ?? "Unknown"}</Badge>
               {album.subgenres?.map((s) => (
                 <Badge key={s} variant="outline" className="capitalize">{s}</Badge>
               ))}
@@ -173,7 +176,7 @@ export default function AlbumDetailPage({
                 </Card>
                 <Card>
                   <CardContent className="p-6 text-center">
-                    <div className="text-3xl font-bold">{album.eloRating ?? "—"}</div>
+                    <div className="text-3xl font-bold">{album.eloRating ?? "1000"}</div>
                     <p className="text-sm text-muted-foreground">Elo Rating</p>
                   </CardContent>
                 </Card>

@@ -1,3 +1,4 @@
+// src/app/api/ratings/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { eq, and } from "drizzle-orm";
@@ -6,27 +7,17 @@ import { ratings } from "~/server/db/schema";
 
 export async function GET(
   req: NextRequest,
-  // В Next.js 15 params — це Promise
   { params }: { params: Promise<{ id: string }> } 
 ) {
   try {
-    // 1. Обов'язково чекаємо params
     const { id: albumId } = await params;
 
-    // 2. Обов'язково чекаємо cookies()
     const cookieStore = await cookies();
-    const token = cookieStore.get("spotify_at")?.value;
+    const userId = cookieStore.get("spotify_user_id")?.value;
 
-    if (!token) {
-      return NextResponse.json({ rating: null }, { status: 401 });
+    if (!userId) {
+      return NextResponse.json({ rating: null, eloRating: 1000 }, { status: 401 });
     }
-
-    const userRes = await fetch("https://api.spotify.com/v1/me", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    
-    if (!userRes.ok) return NextResponse.json({ rating: null }, { status: 401 });
-    const userData = await userRes.json();
 
     const userRating = await db
       .select()
@@ -34,16 +25,18 @@ export async function GET(
       .where(
         and(
           eq(ratings.albumSpotifyId, albumId),
-          eq(ratings.userSpotifyId, userData.id)
+          eq(ratings.userSpotifyId, userId)
         )
       )
       .limit(1);
 
+    // Якщо запис існує, віддаємо його дані, якщо ні — дефолтні значення
     return NextResponse.json({ 
-      rating: userRating[0]?.rating ?? null 
+      rating: userRating[0]?.rating ?? null,
+      eloRating: userRating[0]?.eloRating ?? 1000
     });
   } catch (err) {
-    console.error(err);
+    console.error("Classic & Elo rating fetch error:", err);
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }

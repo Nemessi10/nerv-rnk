@@ -33,7 +33,9 @@ export const ratings = createTable(
       .text("album_id")
       .notNull()
       .references(() => albums.spotifyId),
-    rating: d.real("rating").notNull(),
+    rating: d.real("rating"),
+    eloRating: d.real("elo_rating").default(1000).notNull(),
+    matchesCount: d.integer("matches_count").default(0).notNull(),
     createdAt: d.timestamp("created_at").defaultNow().notNull(),
     updatedAt: d.timestamp("updated_at").defaultNow().notNull(),
   }),
@@ -44,3 +46,21 @@ export const ratings = createTable(
     ),
   }),
 );
+
+export const eloMatches = createTable("elo_match", (d) => ({
+  id: d.text("id").primaryKey(),
+  userSpotifyId: d
+    .text("user_id")
+    .notNull()
+    .references(() => users.spotifyId),
+  winnerId: d
+    .text("winner_id")
+    .notNull()
+    .references(() => albums.spotifyId),
+  loserId: d
+    .text("loser_id")
+    .notNull()
+    .references(() => albums.spotifyId),
+  eloDelta: d.real("elo_delta").notNull(),
+  createdAt: d.timestamp("created_at").defaultNow().notNull(),
+}));
