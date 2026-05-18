@@ -15,7 +15,6 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Беремо всі альбоми та приєднуємо класичний рейтинг
     const userLibrary = await db
       .select({
         id: albums.spotifyId,
@@ -23,6 +22,8 @@ export async function GET() {
         artist: albums.artist,
         cover: albums.image,
         year: albums.releaseDate,
+        spotifyAddedAt: albums.spotifyAddedAt,
+        lastPlayedAt: albums.lastPlayedAt,
         rating: ratings.rating,
         eloRating: ratings.eloRating,
       })

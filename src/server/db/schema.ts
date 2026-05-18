@@ -18,6 +18,8 @@ export const albums = createTable("album", (d) => ({
   artistSpotifyId: d.text("artist_spotify_id"),
   image: d.text("image"),
   releaseDate: d.text("release_date"),
+  spotifyAddedAt: d.timestamp("spotify_added_at"),
+  lastPlayedAt: d.timestamp("last_played_at"),
   createdAt: d.timestamp("created_at").defaultNow().notNull(),
 }));
 

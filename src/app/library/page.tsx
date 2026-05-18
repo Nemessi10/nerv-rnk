@@ -45,14 +45,16 @@ export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<string>("all");
+
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [selectedSubgenre, setSelectedSubgenre] = useState<string | null>(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [minRating, setMinRating] = useState<number | null>(null);
 
-  const [sortBy, setSortBy] = useState<"title" | "artist" | "year" | "elo">(
-    "elo",
-  );
+  const [sortBy, setSortBy] = useState<
+    "title" | "artist" | "year" | "elo" | "classic" | "added" | "played"
+  >("played");
 
   const genres = useMemo(() => {
     return [...new Set(albums.map((a) => a.genre).filter(Boolean))];
@@ -68,6 +70,13 @@ export default function LibraryPage() {
 
   const sortedAndFilteredAlbums = useMemo(() => {
     const filtered = albums.filter((album) => {
+      if (activeTab === "top") {
+        const hasClassicRating = typeof album.rating === "number";
+        const hasEloMatches =
+          album.eloRating !== null && album.eloRating !== 1000;
+        if (!hasClassicRating && !hasEloMatches) return false;
+      }
+
       const matchesSearch =
         !searchQuery ||
         album.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -151,6 +160,28 @@ export default function LibraryPage() {
         });
         break;
 
+      case "added":
+        sorted.sort((a, b) => {
+          return (
+            new Date(b.spotifyAddedAt ?? 0).getTime() -
+            new Date(a.spotifyAddedAt ?? 0).getTime()
+          );
+        });
+        break;
+
+      case "played":
+        sorted.sort((a, b) => {
+          return (
+            new Date(b.lastPlayedAt ?? 0).getTime() -
+            new Date(a.lastPlayedAt ?? 0).getTime()
+          );
+        });
+        break;
+
+      case "classic":
+        sorted.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+        break;
+
       case "elo":
       default:
         sorted.sort((a, b) => (b.eloRating ?? 1000) - (a.eloRating ?? 1000));
@@ -166,6 +197,7 @@ export default function LibraryPage() {
     selectedMood,
     minRating,
     sortBy,
+    activeTab,
   ]);
 
   if (loading) {
@@ -225,6 +257,16 @@ export default function LibraryPage() {
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => setSortBy("elo")}>
                 Elo Rating (Top)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy("classic")}>
+                Classic Rating (Top)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy("played")}>
+                Recently Played
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={() => setSortBy("added")}>
+                Recently Added
               </DropdownMenuItem>
 
               <DropdownMenuItem onClick={() => setSortBy("title")}>
@@ -341,10 +383,16 @@ export default function LibraryPage() {
       )}
 
       {/* TABS */}
-      <Tabs defaultValue="all" className="mb-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="mb-6"
+      >
         <TabsList>
           <TabsTrigger value="all">All Albums</TabsTrigger>
-          <TabsTrigger value="top">Top Rated</TabsTrigger>
+          <TabsTrigger value="top" className="gap-1.5">
+            Rated Albums
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -445,6 +493,12 @@ export default function LibraryPage() {
               </Card>
             </Link>
           ))}
+        </div>
+      )}
+
+      {sortedAndFilteredAlbums.length === 0 && (
+        <div className="py-12 text-center text-sm text-muted-foreground">
+          No albums found matching the criteria.
         </div>
       )}
     </div>

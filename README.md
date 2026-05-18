@@ -58,8 +58,6 @@ This project aims to offer something no major streaming platform provides — ac
 - [ ] Mobile-friendly layout (future)
 - [ ] Recommendation engine (future)
 
-Note: currently sorting and filtering not working due to refactor: sync library with db
-
 ---
 
 ## 🌟 Credits

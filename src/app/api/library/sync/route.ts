@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { sql } from "drizzle-orm";
 import { db } from "~/server/db";
 import { albums } from "~/server/db/schema";
 
 export const dynamic = "force-dynamic";
 
-const SYNC_COOLDOWN = 1000 * 60 * 5; // 5 хвилин кулдауну
+ const SYNC_COOLDOWN = 1000 * 60 * 5; // 5 minutes
 
 export async function POST() {
   try {
     const cookieStore = await cookies();
     
-    // Перевіряємо таймстамп останньої синхронізації з куків
     const lastSync = cookieStore.get("last_library_sync")?.value;
     if (lastSync && Date.now() - Number(lastSync) < SYNC_COOLDOWN) {
-      // Якщо 5 хвилин ще не пройшло, віддаємо успіх за 1 мілісекунду
       return NextResponse.json({ success: true, message: "Cooldowned" });
     }
 
@@ -32,26 +31,57 @@ export async function POST() {
       nextUrl = data.next;
     }
 
-    const albumsToInsert = allSpotifyAlbums.map((item: any) => ({
-      spotifyId: item.album.id,
-      title: item.album.name,
-      artist: item.album.artists[0]?.name ?? "Unknown Artist",
-      artistSpotifyId: item.album.artists[0]?.id ?? null,
-      image: item.album.images[0]?.url ?? null,
-      releaseDate: item.album.release_date,
-    }));
+    const recentRes = await fetch("https://api.spotify.com/v1/me/player/recently-played?limit=50", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    const recentPlaybacks = recentRes.ok ? (await recentRes.json()).items : [];
+    
+    const playbackMap = new Map<string, Date>();
+    recentPlaybacks.forEach((play: any) => {
+      const albumId = play.track?.album?.id;
+      const playedAt = new Date(play.played_at);
+      if (albumId) {
+        const existing = playbackMap.get(albumId);
+        if (!existing || playedAt > existing) {
+          playbackMap.set(albumId, playedAt);
+        }
+      }
+    });
 
-    if (albumsToInsert.length > 0) {
-      await db.insert(albums).values(albumsToInsert).onConflictDoNothing();
+    if (allSpotifyAlbums.length > 0) {
+      const albumsToInsert = allSpotifyAlbums.map((item: any) => {
+        const albumId = item.album.id;
+        return {
+          spotifyId: albumId,
+          title: item.album.name,
+          artist: item.album.artists[0]?.name ?? "Unknown Artist",
+          artistSpotifyId: item.album.artists[0]?.id ?? null,
+          image: item.album.images[0]?.url ?? null,
+          releaseDate: item.album.release_date,
+          spotifyAddedAt: new Date(item.added_at),
+          lastPlayedAt: playbackMap.get(albumId) ?? null,
+        };
+      });
+
+      await db
+        .insert(albums)
+        .values(albumsToInsert)
+        .onConflictDoUpdate({
+          target: albums.spotifyId,
+          set: {
+            spotifyAddedAt: sql`excluded.spotify_added_at`,
+            lastPlayedAt: sql`excluded.last_played_at`,
+          }
+        });
     }
 
-    // Встановлюємо куку-маркер на 5 хвилин
     cookieStore.set("last_library_sync", Date.now().toString(), {
-      maxAge: 60 * 5, // 5 хвилин
+      maxAge: 60 * 5,
       path: "/",
     });
 
-    return NextResponse.json({ success: true, count: albumsToInsert.length });
+    return NextResponse.json({ success: true, count: allSpotifyAlbums.length });
   } catch (err) {
     console.error("Library sync error:", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
