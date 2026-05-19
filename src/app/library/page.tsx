@@ -1,9 +1,12 @@
+// src/app/library/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation"; // 💡 Додано для програмного редіректу
 
+import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -25,6 +28,8 @@ import {
   Search,
   SlidersHorizontal,
   Star,
+  XCircle,
+  Dices, // 💡 Іконка кубиків для фічі рандому
 } from "lucide-react";
 
 import {
@@ -40,11 +45,11 @@ import type { AppAlbum } from "~/types/album";
 
 export default function LibraryPage() {
   const { albums, loading } = useSpotifyLibrary();
+  const router = useRouter(); // 💡 Ініціалізуємо роутер Next.js
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-
   const [activeTab, setActiveTab] = useState<string>("all");
 
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
@@ -54,7 +59,48 @@ export default function LibraryPage() {
 
   const [sortBy, setSortBy] = useState<
     "title" | "artist" | "year" | "elo" | "classic" | "added" | "played"
-  >("played");
+  >(() => {
+    if (typeof window !== "undefined") {
+      const savedSort = localStorage.getItem("library_sort_by");
+      const validSorts = [
+        "title",
+        "artist",
+        "year",
+        "elo",
+        "classic",
+        "added",
+        "played",
+      ];
+      if (savedSort && validSorts.includes(savedSort)) {
+        return savedSort as any;
+      }
+    }
+    return "played";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("library_sort_by", sortBy);
+    }
+  }, [sortBy]);
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setSelectedGenre(null);
+    setSelectedSubgenre(null);
+    setSelectedMood(null);
+    setMinRating(null);
+  };
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      !!searchQuery ||
+      !!selectedGenre ||
+      !!selectedSubgenre ||
+      !!selectedMood ||
+      minRating !== null
+    );
+  }, [searchQuery, selectedGenre, selectedSubgenre, selectedMood, minRating]);
 
   const genres = useMemo(() => {
     return [...new Set(albums.map((a) => a.genre).filter(Boolean))];
@@ -179,12 +225,40 @@ export default function LibraryPage() {
         break;
 
       case "classic":
-        sorted.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+        sorted.sort((a, b) => {
+          const scoreA = a.rating ?? -1;
+          const scoreB = b.rating ?? -1;
+
+          if (scoreA !== scoreB) {
+            return scoreB - scoreA;
+          }
+          const eloA = a.eloRating ?? 1000;
+          const eloB = b.eloRating ?? 1000;
+          if (eloA !== eloB) return eloB - eloA;
+
+          return prepareForComparison(a.title).localeCompare(
+            prepareForComparison(b.title),
+          );
+        });
         break;
 
       case "elo":
       default:
-        sorted.sort((a, b) => (b.eloRating ?? 1000) - (a.eloRating ?? 1000));
+        sorted.sort((a, b) => {
+          const eloA = a.eloRating ?? 1000;
+          const eloB = b.eloRating ?? 1000;
+
+          if (eloA !== eloB) {
+            return eloB - eloA;
+          }
+          const scoreA = a.rating ?? -1;
+          const scoreB = b.rating ?? -1;
+          if (scoreA !== scoreB) return scoreB - scoreA;
+
+          return prepareForComparison(a.title).localeCompare(
+            prepareForComparison(b.title),
+          );
+        });
         break;
     }
 
@@ -200,6 +274,20 @@ export default function LibraryPage() {
     activeTab,
   ]);
 
+  // 💡 ФУНКЦІЯ ПЕРЕХОДУ НА ВИПАДКОВИЙ АЛЬБОМ З ПОТОЧНОЇ ВИБІРКИ
+  const handleRandomAlbum = () => {
+    if (!sortedAndFilteredAlbums.length) return;
+
+    const randomIndex = Math.floor(
+      Math.random() * sortedAndFilteredAlbums.length,
+    );
+    const randomAlbum = sortedAndFilteredAlbums[randomIndex];
+
+    if (randomAlbum?.id) {
+      router.push(`/album/${randomAlbum.id}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 text-muted-foreground">
@@ -211,7 +299,7 @@ export default function LibraryPage() {
   return (
     <div className="container mx-auto px-4 py-6 md:py-10">
       {/* HEADER */}
-      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row">
+      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-3xl font-bold">Your Library</h1>
           <p className="text-muted-foreground">
@@ -219,10 +307,18 @@ export default function LibraryPage() {
           </p>
         </div>
 
-        <Button className="gap-2" size="lg">
-          <Search className="h-4 w-4" />
-          Find new albums
-        </Button>
+        {/* 💡 ВИПРАВЛЕНО: Додано стильну кнопку "Surprise Me" з іконкою гральних кубиків */}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={handleRandomAlbum}
+            disabled={sortedAndFilteredAlbums.length === 0}
+            size="lg"
+            className="h-11 gap-2 rounded-md bg-primary px-5 text-sm font-medium shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+          >
+            <Dices className="h-4 w-4" />
+            <span>Surprise Me</span>
+          </Button>
+        </div>
       </div>
 
       {/* SEARCH + CONTROLS */}
@@ -241,10 +337,26 @@ export default function LibraryPage() {
           <Button
             variant="outline"
             size="icon"
+            className={cn(
+              "h-10 w-10",
+              showFilters && "border-primary/30 bg-secondary/40 text-primary",
+            )}
             onClick={() => setShowFilters(!showFilters)}
           >
             <Filter className="h-4 w-4" />
           </Button>
+
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleResetFilters}
+              className="h-10 w-10"
+              title="Reset all filters"
+            >
+              <XCircle className="h-5 w-5" />
+            </Button>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -264,19 +376,15 @@ export default function LibraryPage() {
               <DropdownMenuItem onClick={() => setSortBy("played")}>
                 Recently Played
               </DropdownMenuItem>
-
               <DropdownMenuItem onClick={() => setSortBy("added")}>
                 Recently Added
               </DropdownMenuItem>
-
               <DropdownMenuItem onClick={() => setSortBy("title")}>
                 Album Name
               </DropdownMenuItem>
-
               <DropdownMenuItem onClick={() => setSortBy("artist")}>
                 Artist
               </DropdownMenuItem>
-
               <DropdownMenuItem onClick={() => setSortBy("year")}>
                 Year
               </DropdownMenuItem>
@@ -307,7 +415,6 @@ export default function LibraryPage() {
       {showFilters && (
         <Card className="mb-6">
           <CardContent className="grid gap-4 p-4 sm:grid-cols-4">
-            {/* GENRE */}
             <Select
               value={selectedGenre || "all"}
               onValueChange={(v) => setSelectedGenre(v === "all" ? null : v)}
@@ -325,7 +432,6 @@ export default function LibraryPage() {
               </SelectContent>
             </Select>
 
-            {/* SUBGENRE */}
             <Select
               value={selectedSubgenre || "all"}
               onValueChange={(v) => setSelectedSubgenre(v === "all" ? null : v)}
@@ -343,7 +449,6 @@ export default function LibraryPage() {
               </SelectContent>
             </Select>
 
-            {/* MOOD */}
             <Select
               value={selectedMood || "all"}
               onValueChange={(v) => setSelectedMood(v === "all" ? null : v)}
@@ -361,7 +466,6 @@ export default function LibraryPage() {
               </SelectContent>
             </Select>
 
-            {/* RATING */}
             <Select
               value={minRating?.toString() || "all"}
               onValueChange={(v) =>
@@ -383,11 +487,7 @@ export default function LibraryPage() {
       )}
 
       {/* TABS */}
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="mb-6"
-      >
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
         <TabsList>
           <TabsTrigger value="all">All Albums</TabsTrigger>
           <TabsTrigger value="top" className="gap-1.5">
@@ -413,7 +513,6 @@ export default function LibraryPage() {
                   </div>
 
                   <CardContent className="p-3 pb-0">
-                    {/* ПОВЕРНУТО ЗРУЧНИЙ ТЕКСТОВИЙ РОЗМІР ТА ШРИФТИ */}
                     <h3 className="line-clamp-1 text-base font-bold">
                       {album.title}
                     </h3>
@@ -464,7 +563,6 @@ export default function LibraryPage() {
                     />
                   </div>
                   <div>
-                    {/* ПОВЕРНУТО ТЕКСТОВИЙ РОЗМІР ДЛЯ СПИСКУ */}
                     <p className="line-clamp-1 text-base font-bold">
                       {album.title}
                     </p>

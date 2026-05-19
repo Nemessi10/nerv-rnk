@@ -94,7 +94,7 @@ export async function POST() {
             genre: sql`excluded.genre`,
             subgenres: sql`excluded.subgenres`,
             spotifyAddedAt: sql`excluded.spotify_added_at`,
-            lastPlayedAt: sql`excluded.last_played_at`,
+            lastPlayedAt: sql`COALESCE(excluded.last_played_at, ${albums.lastPlayedAt})`,
           }
         });
     }
