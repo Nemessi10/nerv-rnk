@@ -21,6 +21,8 @@ export async function GET() {
         title: albums.title,
         artist: albums.artist,
         cover: albums.image,
+        genre: albums.genre,
+        subgenres: albums.subgenres,
         year: albums.releaseDate,
         spotifyAddedAt: albums.spotifyAddedAt,
         lastPlayedAt: albums.lastPlayedAt,

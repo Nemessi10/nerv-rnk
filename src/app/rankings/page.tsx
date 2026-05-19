@@ -1,6 +1,7 @@
+// src/app/rankings/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "~/components/ui/button";
@@ -16,18 +17,12 @@ import {
 } from "~/components/ui/dropdown-menu";
 import {
   ChevronDown,
-  Filter,
   Search,
   SlidersHorizontal,
   Star,
+  Loader2,
+  ChevronUp,
 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import {
   Table,
   TableBody,
@@ -37,206 +32,124 @@ import {
   TableRow,
 } from "~/components/ui/table";
 
-// Mock data for albums
-const albums = [
-  {
-    id: 1,
-    title: "The Dark Side of the Moon",
-    artist: "Pink Floyd",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 1973,
-    genre: "Progressive Rock",
-    subgenre: "Space Rock",
-    moods: ["Introspective", "Atmospheric", "Melancholic"],
-    rating: 9.2,
-    eloRating: 1850,
-  },
-  {
-    id: 2,
-    title: "OK Computer",
-    artist: "Radiohead",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 1997,
-    genre: "Alternative Rock",
-    subgenre: "Art Rock",
-    moods: ["Anxious", "Dystopian", "Melancholic"],
-    rating: 9.5,
-    eloRating: 1920,
-  },
-  {
-    id: 3,
-    title: "To Pimp a Butterfly",
-    artist: "Kendrick Lamar",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 2015,
-    genre: "Hip Hop",
-    subgenre: "Conscious Hip Hop",
-    moods: ["Introspective", "Political", "Energetic"],
-    rating: 9.3,
-    eloRating: 1880,
-  },
-  {
-    id: 4,
-    title: "Kid A",
-    artist: "Radiohead",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 2000,
-    genre: "Electronic",
-    subgenre: "Experimental Rock",
-    moods: ["Atmospheric", "Cold", "Alienated"],
-    rating: 9.0,
-    eloRating: 1830,
-  },
-  {
-    id: 5,
-    title: "Vespertine",
-    artist: "Björk",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 2001,
-    genre: "Electronic",
-    subgenre: "Art Pop",
-    moods: ["Intimate", "Winter", "Delicate"],
-    rating: 8.8,
-    eloRating: 1790,
-  },
-  {
-    id: 6,
-    title: "Blonde",
-    artist: "Frank Ocean",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 2016,
-    genre: "R&B",
-    subgenre: "Alternative R&B",
-    moods: ["Melancholic", "Introspective", "Nostalgic"],
-    rating: 9.1,
-    eloRating: 1840,
-  },
-  {
-    id: 7,
-    title: "Currents",
-    artist: "Tame Impala",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 2015,
-    genre: "Psychedelic Pop",
-    subgenre: "Neo-Psychedelia",
-    moods: ["Dreamy", "Introspective", "Euphoric"],
-    rating: 8.7,
-    eloRating: 1780,
-  },
-  {
-    id: 8,
-    title: "In Rainbows",
-    artist: "Radiohead",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 2007,
-    genre: "Alternative Rock",
-    subgenre: "Art Rock",
-    moods: ["Warm", "Intimate", "Melancholic"],
-    rating: 9.4,
-    eloRating: 1900,
-  },
-  {
-    id: 9,
-    title: "Madvillainy",
-    artist: "Madvillain",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 2004,
-    genre: "Hip Hop",
-    subgenre: "Underground Hip Hop",
-    moods: ["Playful", "Eccentric", "Cryptic"],
-    rating: 9.2,
-    eloRating: 1850,
-  },
-  {
-    id: 10,
-    title: "My Beautiful Dark Twisted Fantasy",
-    artist: "Kanye West",
-    cover: "/placeholder.svg?height=300&width=300",
-    year: 2010,
-    genre: "Hip Hop",
-    subgenre: "Pop Rap",
-    moods: ["Grandiose", "Emotional", "Ambitious"],
-    rating: 9.6,
-    eloRating: 1950,
-  },
-];
-
-// Extract unique genres
-const genres = [...new Set(albums.map((album) => album.genre))];
+import { useSpotifyLibrary } from "~/hooks/use-spotify-library";
+import type { AppAlbum } from "~/types/album";
 
 export default function RankingsPage() {
+  const { albums, loading } = useSpotifyLibrary();
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<string>("rating");
+  const [sortBy, setSortBy] = useState<"eloRating" | "rating">("eloRating");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  // Filter albums based on search query and filters
-  const filteredAlbums = albums.filter((album) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      album.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      album.artist.toLowerCase().includes(searchQuery.toLowerCase());
+  // Стан для збереження розгорнутих жанрів: { "Rock": true, "Pop": false }
+  const [expandedGenres, setExpandedGenres] = useState<Record<string, boolean>>({});
 
-    const matchesGenre =
-      selectedGenre === null || album.genre === selectedGenre;
+  // Фільтруємо альбоми: залишаємо лише оцінені для лідерборду + пошуковий рядок
+  const filteredAlbums = useMemo(() => {
+    return albums.filter((album) => {
+      const hasClassicRating = typeof album.rating === "number";
+      const hasEloMatches = album.eloRating !== null && album.eloRating !== 1000;
+      if (!hasClassicRating && !hasEloMatches) return false;
 
-    return matchesSearch && matchesGenre;
-  });
+      return (
+        searchQuery === "" ||
+        album.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        album.artist.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    });
+  }, [albums, searchQuery]);
 
-  // Sort albums based on sort criteria
-  const sortedAlbums = [...filteredAlbums].sort((a, b) => {
-    let comparison = 0;
-    if (sortBy === "rating") {
-      comparison = a.rating - b.rating;
-    } else if (sortBy === "eloRating") {
-      comparison = a.eloRating - b.eloRating;
-    } else if (sortBy === "title") {
-      comparison = a.title.localeCompare(b.title);
-    } else if (sortBy === "artist") {
-      comparison = a.artist.localeCompare(b.artist);
-    } else if (sortBy === "year") {
-      comparison = a.year - b.year;
-    }
+  // Збираємо унікальні жанри тільки оцінених альбомів
+  const ratedGenres = useMemo(() => {
+    return [
+      ...new Set(
+        albums
+          .filter((a) => typeof a.rating === "number" || (a.eloRating && a.eloRating !== 1000))
+          .map((a) => a.genre)
+          .filter(Boolean)
+      ),
+    ] as string[];
+  }, [albums]);
 
-    return sortOrder === "desc" ? -comparison : comparison;
-  });
+  // Суворе сортування: Elo або Classic (в обох напрямках)
+  const sortedAlbums = useMemo(() => {
+    const sorted = [...filteredAlbums];
+    
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === "rating") {
+        comparison = (a.rating ?? 0) - (b.rating ?? 0);
+      } else if (sortBy === "eloRating") {
+        comparison = (a.eloRating ?? 1000) - (b.eloRating ?? 1000);
+      }
+      return sortOrder === "desc" ? -comparison : comparison;
+    });
 
-  // Group albums by genre for the Genres tab
-  const albumsByGenre = genres.map((genre) => {
-    const genreAlbums = albums.filter((album) => album.genre === genre);
-    const topAlbums = [...genreAlbums]
-      .sort((a, b) => b.rating - a.rating)
-      .slice(0, 3);
-    const avgRating =
-      genreAlbums.reduce((sum, album) => sum + album.rating, 0) /
-      genreAlbums.length;
+    return sorted;
+  }, [filteredAlbums, sortBy, sortOrder]);
 
-    return {
-      genre,
-      albumCount: genreAlbums.length,
-      avgRating: avgRating.toFixed(1),
-      topAlbums,
-    };
-  });
+  // Динамічне групування за жанрами
+  const albumsByGenre = useMemo(() => {
+    return ratedGenres
+      .map((genre) => {
+        const genreAlbums = albums.filter(
+          (album) =>
+            album.genre === genre &&
+            (typeof album.rating === "number" || (album.eloRating && album.eloRating !== 1000))
+        );
+        
+        // Сортуємо всі альбоми всередині жанру від найкращого за Elo
+        const allSortedGenreAlbums = [...genreAlbums].sort(
+          (a, b) => (b.eloRating ?? 1000) - (a.eloRating ?? 1000) || (b.rating ?? 0) - (a.rating ?? 0)
+        );
+
+        const ratedAlbumsInGenre = genreAlbums.filter((a) => typeof a.rating === "number");
+        const avgRating =
+          ratedAlbumsInGenre.length > 0
+            ? ratedAlbumsInGenre.reduce((sum, album) => sum + (album.rating ?? 0), 0) /
+              ratedAlbumsInGenre.length
+            : 0;
+
+        return {
+          genre,
+          albumCount: genreAlbums.length,
+          avgRating: avgRating > 0 ? avgRating.toFixed(1) : "—",
+          allAlbums: allSortedGenreAlbums,
+        };
+      })
+      .sort((a, b) => b.albumCount - a.albumCount);
+  }, [albums, ratedGenres]);
+
+  const toggleGenreExpand = (genre: string) => {
+    setExpandedGenres((prev) => ({ ...prev, [genre]: !prev[genre] }));
+  };
+
+  if (loading && albums.length === 0) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-6 md:py-10">
-      <div className="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Rankings</h1>
-          <p className="text-muted-foreground">
-            View and sort your album rankings
-          </p>
-        </div>
+      {/* HEADER */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Rankings</h1>
+        <p className="text-muted-foreground">
+          View your global music leaderboard and charts
+        </p>
       </div>
 
       <Tabs defaultValue="all" className="mb-6">
         <TabsList>
-          <TabsTrigger value="all">All Albums</TabsTrigger>
+          <TabsTrigger value="all">All Rankings</TabsTrigger>
           <TabsTrigger value="genres">By Genre</TabsTrigger>
         </TabsList>
 
+        {/* ТАБ ВСІХ РЕЙТИНГІВ */}
         <TabsContent value="all" className="mt-6">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-1 items-center gap-2">
@@ -244,140 +157,48 @@ export default function RankingsPage() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Search albums or artists..."
+                  placeholder="Search charts..."
                   className="pl-8"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowFilters(!showFilters)}
-                className={
-                  showFilters ? "bg-accent text-accent-foreground" : ""
-                }
-              >
-                <Filter className="h-4 w-4" />
-              </Button>
+
+              {/* ОНОВЛЕНЕ СТРОГЕ МЕНЮ СОРТУВАННЯ */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="gap-1">
                     <SlidersHorizontal className="h-4 w-4" />
-                    <span className="hidden sm:inline">Sort</span>
+                    <span>
+                      Sort: {sortBy === "eloRating" ? "Elo" : "Classic Rating"}{" "}
+                      {sortOrder === "desc" ? "(Highest)" : "(Lowest)"}
+                    </span>
                     <ChevronDown className="h-3 w-3 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("rating");
-                      setSortOrder("desc");
-                    }}
-                  >
-                    Rating (Highest)
+                  <DropdownMenuItem onClick={() => { setSortBy("eloRating"); setSortOrder("desc"); }}>
+                    Elo Rating (Highest to Lowest)
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("rating");
-                      setSortOrder("asc");
-                    }}
-                  >
-                    Rating (Lowest)
+                  <DropdownMenuItem onClick={() => { setSortBy("eloRating"); setSortOrder("asc"); }}>
+                    Elo Rating (Lowest to Highest)
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("eloRating");
-                      setSortOrder("desc");
-                    }}
-                  >
-                    Elo Rating (Highest)
+                  <DropdownMenuItem onClick={() => { setSortBy("rating"); setSortOrder("desc"); }}>
+                    Classic Rating (Highest to Lowest)
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("title");
-                      setSortOrder("asc");
-                    }}
-                  >
-                    Album Name (A-Z)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("artist");
-                      setSortOrder("asc");
-                    }}
-                  >
-                    Artist Name (A-Z)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("year");
-                      setSortOrder("desc");
-                    }}
-                  >
-                    Release Year (Newest)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("year");
-                      setSortOrder("asc");
-                    }}
-                  >
-                    Release Year (Oldest)
+                  <DropdownMenuItem onClick={() => { setSortBy("rating"); setSortOrder("asc"); }}>
+                    Classic Rating (Lowest to Highest)
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
 
-          {showFilters && (
-            <Card className="mb-6 duration-300 animate-in fade-in-0 slide-in-from-top-4">
-              <CardContent className="p-4">
-                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Genre</label>
-                    <Select
-                      value={selectedGenre || ""}
-                      onValueChange={(value) => setSelectedGenre(value || null)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Genres" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">All Genres</SelectItem>
-                        {genres.map((genre) => (
-                          <SelectItem key={genre} value={genre}>
-                            {genre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {filteredAlbums.length} album
-                    {filteredAlbums.length !== 1 ? "s" : ""} found
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedGenre(null);
-                    }}
-                  >
-                    Reset Filters
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="rounded-md border">
+          <div className="rounded-md border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12 text-center">Rank</TableHead>
+                  <TableHead className="w-16 text-center">Rank</TableHead>
                   <TableHead className="w-12"></TableHead>
                   <TableHead>Album</TableHead>
                   <TableHead>Artist</TableHead>
@@ -389,40 +210,41 @@ export default function RankingsPage() {
               </TableHeader>
               <TableBody>
                 {sortedAlbums.map((album, index) => (
-                  <TableRow key={album.id} className="hover:bg-secondary/50">
-                    <TableCell className="text-center font-medium">
-                      {index + 1}
+                  <TableRow key={album.id} className="hover:bg-secondary/40 transition-colors">
+                    <TableCell className="text-center font-bold text-base text-muted-foreground/80">
+                      #{index + 1}
                     </TableCell>
-                    <TableCell>
-                      <Image
-                        src={album.cover || "/placeholder.svg"}
-                        alt={album.title}
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 rounded-sm object-cover"
-                      />
+                    <TableCell className="py-2">
+                      <div className="relative h-10 w-10 overflow-hidden rounded bg-muted">
+                        <Image src={album.cover || "/placeholder.svg"} alt="" fill className="object-cover" />
+                      </div>
                     </TableCell>
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/album/${album.id}`}
-                        className="hover:underline"
-                      >
+                    <TableCell className="font-bold text-base">
+                      <Link href={`/album/${album.id}`} className="hover:underline hover:text-primary">
                         {album.title}
                       </Link>
                     </TableCell>
-                    <TableCell>{album.artist}</TableCell>
-                    <TableCell>{album.year}</TableCell>
+                    <TableCell className="text-sm font-medium">{album.artist}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {album.year ? album.year.slice(0, 4) : "—"}
+                    </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{album.genre}</Badge>
+                      <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-wider">
+                        {album.genre || "Unknown"}
+                      </Badge>
                     </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Star className="h-3 w-3 fill-primary text-primary" />
-                        <span>{album.rating}</span>
-                      </div>
+                    <TableCell className="text-center font-bold">
+                      {typeof album.rating === "number" ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <Star className="h-3.5 w-3.5 fill-primary text-primary" />
+                          <span>{album.rating.toFixed(1)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground/40">—</span>
+                      )}
                     </TableCell>
-                    <TableCell className="text-center">
-                      {album.eloRating}
+                    <TableCell className="text-center font-black text-primary">
+                      {album.eloRating ?? 1000}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -431,67 +253,82 @@ export default function RankingsPage() {
           </div>
         </TabsContent>
 
+        {/* ТАБ ГРУПУВАННЯ ЗА ЖАНРАМИ С ПОЛНИМ СПИСКОМ АЛЬБОМІВ */}
         <TabsContent value="genres" className="mt-6">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {albumsByGenre.map((genreData) => (
-              <Card key={genreData.genre} className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="border-b p-4">
-                    <h3 className="text-xl font-bold">{genreData.genre}</h3>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        {genreData.albumCount} albums
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-3 w-3 fill-primary text-primary" />
-                        <span className="font-medium">
-                          {genreData.avgRating}
+            {albumsByGenre.map((genreData) => {
+              const isExpanded = expandedGenres[genreData.genre] ?? false;
+              // Показуємо всі альбоми, якщо розгорнуто, інакше тільки перші 3
+              const visibleAlbums = isExpanded
+                ? genreData.allAlbums
+                : genreData.allAlbums.slice(0, 3);
+
+              return (
+                <Card key={genreData.genre} className="overflow-hidden flex flex-col justify-between hover:border-primary/20 transition-all h-fit">
+                  <div>
+                    <div className="border-b bg-secondary/10 p-4">
+                      <h3 className="text-xl font-black tracking-tight uppercase text-card-foreground">{genreData.genre}</h3>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                          {genreData.albumCount} ranked album{genreData.albumCount !== 1 ? "s" : ""}
                         </span>
+                        <div className="flex items-center gap-1 bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">
+                          <Star className="h-3 w-3 fill-primary text-primary" />
+                          <span className="text-xs font-bold text-primary">{genreData.avgRating}</span>
+                        </div>
                       </div>
                     </div>
+
+                    <div className="divide-y max-h-[450px] overflow-y-auto">
+                      {visibleAlbums.map((album, idx) => (
+                        <Link key={album.id} href={`/album/${album.id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-secondary/30">
+                          <span className="text-xs font-bold text-muted-foreground/40 w-4 text-center">
+                            {idx + 1}
+                          </span>
+                          <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-muted">
+                            <Image src={album.cover || "/placeholder.svg"} alt="" fill className="object-cover" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-card-foreground">{album.title}</p>
+                            <p className="truncate text-xs text-muted-foreground">{album.artist}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-xs font-black text-primary">{album.eloRating ?? 1000}</span>
+                            {typeof album.rating === "number" && (
+                              <span className="text-[10px] font-medium text-muted-foreground flex items-center gap-0.5">
+                                ★ {album.rating.toFixed(1)}
+                              </span>
+                            )}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
-                  <div className="divide-y">
-                    {genreData.topAlbums.map((album) => (
-                      <Link
-                        key={album.id}
-                        href={`/album/${album.id}`}
-                        className="flex items-center gap-3 p-3 transition-colors hover:bg-secondary/50"
+
+                  {/* ІНТЕРАКТИВНА КНОПКА РОЗГОРТАННЯ СПИСКУ ЖАНРУ */}
+                  {genreData.allAlbums.length > 3 && (
+                    <div className="border-t p-2 bg-secondary/5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full font-bold text-xs uppercase tracking-wider gap-1 text-muted-foreground hover:text-primary"
+                        onClick={() => toggleGenreExpand(genreData.genre)}
                       >
-                        <Image
-                          src={album.cover || "/placeholder.svg"}
-                          alt={album.title}
-                          width={50}
-                          height={50}
-                          className="h-12 w-12 rounded-sm object-cover"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">{album.title}</p>
-                          <p className="truncate text-sm text-muted-foreground">
-                            {album.artist}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-3 w-3 fill-primary text-primary" />
-                          <span className="font-medium">{album.rating}</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                  <div className="border-t p-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full"
-                      asChild
-                    >
-                      <Link href={`/library?genre=${genreData.genre}`}>
-                        View All
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                        {isExpanded ? (
+                          <>
+                            Show Less <ChevronUp className="h-3 w-3" />
+                          </>
+                        ) : (
+                          <>
+                            Show All ({genreData.allAlbums.length}) <ChevronDown className="h-3 w-3" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         </TabsContent>
       </Tabs>
