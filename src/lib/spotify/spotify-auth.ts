@@ -20,6 +20,7 @@ const SCOPES = [
 ];
 
 class SpotifyAuthService {
+  private refreshPromise: Promise<string | null> | null = null;
   private static instance: SpotifyAuthService;
 
   static getInstance() {
@@ -66,9 +67,6 @@ class SpotifyAuthService {
     return null;
   }
 
-  // =========================
-  // LOGIN
-  // =========================
   async login() {
     const verifier = this.generateRandomString(64);
 
@@ -91,9 +89,6 @@ class SpotifyAuthService {
 
   async handleCallback(code: string) {
     const verifier = sessionStorage.getItem(STORAGE_KEY);
-
-    // console.log("[PKCE] code:", code);
-    // console.log("[PKCE] verifier:", verifier);
 
     if (!verifier) {
       throw new Error(
@@ -121,7 +116,6 @@ class SpotifyAuthService {
     }
 
     const data = JSON.parse(raw);
-    // console.log("TOKEN RESPONSE:", data);
 
     sessionStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
     sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
@@ -148,11 +142,7 @@ class SpotifyAuthService {
   }
 
   async getAccessToken() {
-    // ПЕРЕВІРКА НА СЕРВЕР
     if (typeof window === "undefined") {
-      // Якщо ми на сервері, читаємо з cookies (через next/headers у роутах)
-      // Але оскільки цей клас - синглтон для всього додатка,
-      // ми повернемо null тут і обробимо це в API роуті.
       return null;
     }
 
@@ -165,48 +155,65 @@ class SpotifyAuthService {
 
     if (isExpired) {
       const newToken = await this.refreshAccessToken();
-
-      if (!newToken) {
-        return null;
-      }
-
       return newToken;
     }
-
     return token;
   }
 
-  async refreshAccessToken() {
-    const refresh_token = sessionStorage.getItem(REFRESH_TOKEN_KEY);
-
-    if (!refresh_token) {
-      this.logout();
-      return null;
+  async refreshAccessToken(): Promise<string | null> {
+    if (this.refreshPromise) {
+      console.log("♻️ Refresh in progress, waiting...");
+      return this.refreshPromise;
     }
 
-    const res = await fetch("/api/auth/spotify/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token }),
-    });
+    this.refreshPromise = (async () => {
+      try {
+        console.log("🚀 Starting new refresh token request...");
+        
+        const currentRefreshToken = sessionStorage.getItem(REFRESH_TOKEN_KEY);
 
-    if (!res.ok) {
-      this.logout();
-      throw new Error("Refresh failed");
-    }
+        if (!currentRefreshToken) {
+          throw new Error("No refresh token available in storage");
+        }
 
-    const data = await res.json();
-    const newToken = data.access_token;
+        const res = await fetch("/api/auth/spotify/refresh", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            refresh_token: currentRefreshToken,
+          }),
+        });
 
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem(ACCESS_TOKEN_KEY, newToken);
-      sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token ?? refresh_token);
-      sessionStorage.setItem(EXPIRES_AT_KEY, String(Date.now() + data.expires_in * 1000));
-      
-      Cookies.set(COOKIE_ACCESS_TOKEN, newToken, { expires: 1 / 24 });
-    }
+        if (!res.ok) throw new Error("Refresh failed");
 
-    return newToken;
+        const data = await res.json();
+        const newToken = data.access_token;
+
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(ACCESS_TOKEN_KEY, newToken);
+          if (data.refresh_token) {
+            sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+          }
+          
+          sessionStorage.setItem(
+            EXPIRES_AT_KEY,
+            String(Date.now() + data.expires_in * 1000)
+          );
+          Cookies.set(COOKIE_ACCESS_TOKEN, newToken, { expires: 1 / 24 });
+        }
+
+        return newToken;
+      } catch (error) {
+        console.error("AUTH REFRESH ERROR:", error);
+        return null;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
   logout() {
