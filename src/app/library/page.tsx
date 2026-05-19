@@ -1,10 +1,9 @@
-// src/app/library/page.tsx
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation"; // 💡 Додано для програмного редіректу
+import { useRouter } from "next/navigation";
 
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -29,7 +28,7 @@ import {
   SlidersHorizontal,
   Star,
   XCircle,
-  Dices, // 💡 Іконка кубиків для фічі рандому
+  Dices,
 } from "lucide-react";
 
 import {
@@ -45,7 +44,7 @@ import type { AppAlbum } from "~/types/album";
 
 export default function LibraryPage() {
   const { albums, loading } = useSpotifyLibrary();
-  const router = useRouter(); // 💡 Ініціалізуємо роутер Next.js
+  const router = useRouter();
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
@@ -274,7 +273,6 @@ export default function LibraryPage() {
     activeTab,
   ]);
 
-  // 💡 ФУНКЦІЯ ПЕРЕХОДУ НА ВИПАДКОВИЙ АЛЬБОМ З ПОТОЧНОЇ ВИБІРКИ
   const handleRandomAlbum = () => {
     if (!sortedAndFilteredAlbums.length) return;
 
@@ -307,7 +305,6 @@ export default function LibraryPage() {
           </p>
         </div>
 
-        {/* 💡 ВИПРАВЛЕНО: Додано стильну кнопку "Surprise Me" з іконкою гральних кубиків */}
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleRandomAlbum}
@@ -416,7 +413,7 @@ export default function LibraryPage() {
         <Card className="mb-6">
           <CardContent className="grid gap-4 p-4 sm:grid-cols-4">
             <Select
-              value={selectedGenre || "all"}
+              value={selectedGenre ?? "all"}
               onValueChange={(v) => setSelectedGenre(v === "all" ? null : v)}
             >
               <SelectTrigger>
@@ -433,7 +430,7 @@ export default function LibraryPage() {
             </Select>
 
             <Select
-              value={selectedSubgenre || "all"}
+              value={selectedSubgenre ?? "all"}
               onValueChange={(v) => setSelectedSubgenre(v === "all" ? null : v)}
             >
               <SelectTrigger>
@@ -450,7 +447,7 @@ export default function LibraryPage() {
             </Select>
 
             <Select
-              value={selectedMood || "all"}
+              value={selectedMood ?? "all"}
               onValueChange={(v) => setSelectedMood(v === "all" ? null : v)}
             >
               <SelectTrigger>
@@ -467,7 +464,7 @@ export default function LibraryPage() {
             </Select>
 
             <Select
-              value={minRating?.toString() || "all"}
+              value={minRating?.toString() ?? "all"}
               onValueChange={(v) =>
                 setMinRating(v === "all" ? null : Number(v))
               }
