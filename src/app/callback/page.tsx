@@ -24,7 +24,7 @@ export default function CallbackPage() {
         await spotifyAuth.handleCallback(code);
         spotifyApi.clearCache();
         await init();
-        router.push("/library");
+        router.push("/");
       } catch (err) {
         console.error("CALLBACK ERROR:", err);
         router.push("/");

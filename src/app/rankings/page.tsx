@@ -1,4 +1,3 @@
-// src/app/rankings/page.tsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -42,10 +41,8 @@ export default function RankingsPage() {
   const [sortBy, setSortBy] = useState<"eloRating" | "rating">("eloRating");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  // Стан для збереження розгорнутих жанрів: { "Rock": true, "Pop": false }
   const [expandedGenres, setExpandedGenres] = useState<Record<string, boolean>>({});
 
-  // Фільтруємо альбоми: залишаємо лише оцінені для лідерборду + пошуковий рядок
   const filteredAlbums = useMemo(() => {
     return albums.filter((album) => {
       const hasClassicRating = typeof album.rating === "number";
@@ -60,7 +57,6 @@ export default function RankingsPage() {
     });
   }, [albums, searchQuery]);
 
-  // Збираємо унікальні жанри тільки оцінених альбомів
   const ratedGenres = useMemo(() => {
     return [
       ...new Set(
@@ -72,7 +68,6 @@ export default function RankingsPage() {
     ] as string[];
   }, [albums]);
 
-  // Суворе сортування: Elo або Classic (в обох напрямках)
   const sortedAlbums = useMemo(() => {
     const sorted = [...filteredAlbums];
     
@@ -89,7 +84,6 @@ export default function RankingsPage() {
     return sorted;
   }, [filteredAlbums, sortBy, sortOrder]);
 
-  // Динамічне групування за жанрами
   const albumsByGenre = useMemo(() => {
     return ratedGenres
       .map((genre) => {
@@ -99,7 +93,6 @@ export default function RankingsPage() {
             (typeof album.rating === "number" || (album.eloRating && album.eloRating !== 1000))
         );
         
-        // Сортуємо всі альбоми всередині жанру від найкращого за Elo
         const allSortedGenreAlbums = [...genreAlbums].sort(
           (a, b) => (b.eloRating ?? 1000) - (a.eloRating ?? 1000) || (b.rating ?? 0) - (a.rating ?? 0)
         );
@@ -149,7 +142,6 @@ export default function RankingsPage() {
           <TabsTrigger value="genres">By Genre</TabsTrigger>
         </TabsList>
 
-        {/* ТАБ ВСІХ РЕЙТИНГІВ */}
         <TabsContent value="all" className="mt-6">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-1 items-center gap-2">
@@ -164,7 +156,6 @@ export default function RankingsPage() {
                 />
               </div>
 
-              {/* ОНОВЛЕНЕ СТРОГЕ МЕНЮ СОРТУВАННЯ */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="gap-1">
@@ -253,12 +244,10 @@ export default function RankingsPage() {
           </div>
         </TabsContent>
 
-        {/* ТАБ ГРУПУВАННЯ ЗА ЖАНРАМИ С ПОЛНИМ СПИСКОМ АЛЬБОМІВ */}
         <TabsContent value="genres" className="mt-6">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {albumsByGenre.map((genreData) => {
               const isExpanded = expandedGenres[genreData.genre] ?? false;
-              // Показуємо всі альбоми, якщо розгорнуто, інакше тільки перші 3
               const visibleAlbums = isExpanded
                 ? genreData.allAlbums
                 : genreData.allAlbums.slice(0, 3);
@@ -305,7 +294,6 @@ export default function RankingsPage() {
                     </div>
                   </div>
 
-                  {/* ІНТЕРАКТИВНА КНОПКА РОЗГОРТАННЯ СПИСКУ ЖАНРУ */}
                   {genreData.allAlbums.length > 3 && (
                     <div className="border-t p-2 bg-secondary/5">
                       <Button

@@ -57,7 +57,6 @@ export default function RatePage() {
 
   const [activeTab, setActiveTab] = useState("classic");
 
-  // 1. Фільтрація черги
   const queue = useMemo(() => {
     let list = [...albums];
     if (rateMode === "unrated") {
@@ -68,7 +67,6 @@ export default function RatePage() {
     return list;
   }, [albums, rateMode]);
 
-  // 2. Пошук
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     return albums.filter(
@@ -78,7 +76,6 @@ export default function RatePage() {
     );
   }, [albums, searchQuery]);
 
-  // 3. Поточний альбом (береться з пам'яті поточного режиму)
   const currentAlbum = useMemo(() => {
     const selectedId = selectedAlbumIds[rateMode];
     if (selectedId) {
@@ -91,7 +88,6 @@ export default function RatePage() {
     return queue[modeIndices[rateMode]] ?? queue[0];
   }, [queue, rateMode, modeIndices, selectedAlbumIds, albums]);
 
-  // Оновлюємо рейтинг при зміні альбому
   useEffect(() => {
     if (currentAlbum) {
       setCurrentRating(currentAlbum.rating ?? 0);
@@ -153,7 +149,6 @@ export default function RatePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ winnerId, loserId }),
       });
-      // Після голосування одразу вантажимо нову пару
       await fetchEloMatchup();
     } catch (err) {
       console.error(err);
