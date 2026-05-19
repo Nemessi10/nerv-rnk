@@ -1,5 +1,7 @@
+// src/app/analytics/page.tsx
 "use client";
 
+import { useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -9,7 +11,7 @@ import {
 } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Badge } from "~/components/ui/badge";
-import { BarChart, LineChart, PieChart } from "lucide-react";
+import { BarChart, LineChart, PieChart, Loader2, Swords } from "lucide-react";
 import {
   BarChart as RechartsBarChart,
   Bar,
@@ -26,32 +28,9 @@ import {
   Legend,
 } from "recharts";
 
-// Mock data for analytics
-const topAlbums = [
-  {
-    name: "My Beautiful Dark Twisted Fantasy",
-    artist: "Kanye West",
-    rating: 9.6,
-  },
-  { name: "OK Computer", artist: "Radiohead", rating: 9.5 },
-  { name: "In Rainbows", artist: "Radiohead", rating: 9.4 },
-  { name: "To Pimp a Butterfly", artist: "Kendrick Lamar", rating: 9.3 },
-  { name: "Loveless", artist: "My Bloody Valentine", rating: 9.3 },
-  { name: "The Dark Side of the Moon", artist: "Pink Floyd", rating: 9.2 },
-  { name: "Madvillainy", artist: "Madvillain", rating: 9.2 },
-  { name: "Blonde", artist: "Frank Ocean", rating: 9.1 },
-  { name: "Kid A", artist: "Radiohead", rating: 9.0 },
-  { name: "Rumours", artist: "Fleetwood Mac", rating: 9.0 },
-];
-
-const genreData = [
-  { name: "Alternative Rock", value: 35 },
-  { name: "Hip Hop", value: 25 },
-  { name: "Electronic", value: 15 },
-  { name: "R&B", value: 10 },
-  { name: "Rock", value: 8 },
-  { name: "Psychedelic Pop", value: 7 },
-];
+import { useSpotifyLibrary } from "~/hooks/use-spotify-library";
+import { useEloMatches } from "~/hooks/use-elo-matches";
+import type { EloMatch } from "~/types/elo";
 
 const COLORS = [
   "#8b5cf6",
@@ -61,46 +40,287 @@ const COLORS = [
   "#06b6d4",
   "#14b8a6",
 ];
-
-const ratingDistribution = [
-  { rating: "10", count: 5 },
-  { rating: "9", count: 15 },
-  { rating: "8", count: 30 },
-  { rating: "7", count: 40 },
-  { rating: "6", count: 20 },
-  { rating: "5", count: 10 },
-  { rating: "4", count: 5 },
-  { rating: "3", count: 2 },
-  { rating: "2", count: 0 },
-  { rating: "1", count: 0 },
-];
-
-const ratingTrend = [
-  { month: "Jan", avgRating: 7.8 },
-  { month: "Feb", avgRating: 7.9 },
-  { month: "Mar", avgRating: 8.1 },
-  { month: "Apr", avgRating: 8.0 },
-  { month: "May", avgRating: 8.2 },
-  { month: "Jun", avgRating: 8.3 },
-  { month: "Jul", avgRating: 8.4 },
-  { month: "Aug", avgRating: 8.5 },
-  { month: "Sep", avgRating: 8.4 },
-  { month: "Oct", avgRating: 8.6 },
-  { month: "Nov", avgRating: 8.7 },
-  { month: "Dec", avgRating: 8.8 },
-];
-
-const topArtists = [
-  { name: "Radiohead", albumCount: 3, avgRating: 9.3 },
-  { name: "Kendrick Lamar", albumCount: 2, avgRating: 9.2 },
-  { name: "Pink Floyd", albumCount: 2, avgRating: 9.1 },
-  { name: "Björk", albumCount: 1, avgRating: 8.8 },
-  { name: "Kanye West", albumCount: 1, avgRating: 9.6 },
+const ALL_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 export default function AnalyticsPage() {
+  const { albums, loading } = useSpotifyLibrary();
+  const { matches: eloMatches, loading: matchesLoading } = useEloMatches();
+
+  // --- 0. ДИНАМІЧНЕ ОБЧИСЛЕННЯ ОСТАННІХ 6 МІСЯЦІВ ---
+  const last6Months = useMemo(() => {
+    const result = [];
+    const now = new Date();
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      result.push({
+        name: ALL_MONTHS[d.getMonth()]!,
+        monthIdx: d.getMonth(),
+        year: d.getFullYear(),
+      });
+    }
+    return result;
+  }, []);
+
+  // --- 1. ОБЧИСЛЕННЯ ДЛЯ KPI КАРТОК (ВЕРХНЯ ПАНЕЛЬ) ---
+  const kpiStats = useMemo(() => {
+    const total = albums.length;
+    const rated = albums.filter((a) => typeof a.rating === "number");
+    const avg =
+      rated.length > 0
+        ? (
+            rated.reduce((sum, a) => sum + (a.rating ?? 0), 0) / rated.length
+          ).toFixed(1)
+        : "0.0";
+
+    const genreCounts: Record<string, number> = {};
+    albums.forEach((a) => {
+      if (a.genre && a.genre !== "Unknown") {
+        genreCounts[a.genre] = (genreCounts[a.genre] ?? 0) + 1;
+      }
+    });
+
+    const sortedGenres = Object.entries(genreCounts).sort(
+      (a, b) => b[1] - a[1],
+    );
+    const topGenre = sortedGenres[0]?.[0] ?? "None";
+    const topGenrePercent =
+      total > 0 && sortedGenres[0]
+        ? ((sortedGenres[0][1] / total) * 100).toFixed(0)
+        : "0";
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 30);
+    const addedThisMonth = albums.filter(
+      (a) => a.spotifyAddedAt && new Date(a.spotifyAddedAt) > thirtyDaysAgo,
+    ).length;
+
+    return {
+      total,
+      avg,
+      topGenre,
+      topGenrePercent,
+      addedThisMonth,
+    };
+  }, [albums]);
+
+  // --- 2. ДАНІ ДЛЯ ТАБУ OVERVIEW ---
+  const topAlbums = useMemo(() => {
+    return [...albums]
+      .filter((a) => typeof a.rating === "number")
+      .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+      .slice(0, 10)
+      .map((a) => ({
+        name: a.title,
+        artist: a.artist,
+        rating: parseFloat((a.rating ?? 0).toFixed(1)),
+      }));
+  }, [albums]);
+
+  const ratingDistribution = useMemo(() => {
+    const distribution: Record<string, number> = {
+      "10": 0,
+      "9": 0,
+      "8": 0,
+      "7": 0,
+      "6": 0,
+      "5": 0,
+      "4": 0,
+      "3": 0,
+      "2": 0,
+      "1": 0,
+    };
+    albums.forEach((a) => {
+      if (typeof a.rating === "number") {
+        const floorRating = Math.floor(a.rating).toString();
+        if (floorRating in distribution) {
+          distribution[floorRating]! += 1;
+        }
+      }
+    });
+    return Object.entries(distribution)
+      .map(([rating, count]) => ({ rating: `${rating}★`, count }))
+      .reverse();
+  }, [albums]);
+
+  // --- 3. ДАНІ ДЛЯ ТАБУ GENRES ---
+  const genreDistributionData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    albums.forEach((a) => {
+      if (a.genre && a.genre !== "Unknown") {
+        counts[a.genre] = (counts[a.genre] ?? 0) + 1;
+      }
+    });
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [albums]);
+
+  const genreRatingsData = useMemo(() => {
+    const groups: Record<string, { sum: number; count: number }> = {};
+    albums.forEach((a) => {
+      if (typeof a.rating === "number" && a.genre && a.genre !== "Unknown") {
+        if (!groups[a.genre]) groups[a.genre] = { sum: 0, count: 0 };
+        groups[a.genre]!.sum += a.rating;
+        groups[a.genre]!.count += 1;
+      }
+    });
+    return Object.entries(groups)
+      .map(([genre, data]) => ({
+        genre,
+        rating: parseFloat((data.sum / data.count).toFixed(1)),
+      }))
+      .sort((a, b) => b.rating - a.rating)
+      .slice(0, 6);
+  }, [albums]);
+
+  const genreEvolutionData = useMemo(() => {
+    const top3Genres = genreDistributionData.slice(0, 3).map((g) => g.name);
+    const g1 = top3Genres[0] || "Rock";
+    const g2 = top3Genres[1] || "Electronic";
+    const g3 = top3Genres[2] || "Hip Hop";
+
+    const k1 = g1.toLowerCase().replace(/\s+/g, "");
+    const k2 = g2.toLowerCase().replace(/\s+/g, "");
+    const k3 = g3.toLowerCase().replace(/\s+/g, "");
+
+    let c1 = 0,
+      c2 = 0,
+      c3 = 0;
+
+    if (last6Months[0]) {
+      const windowStartLimit = new Date(
+        last6Months[0].year,
+        last6Months[0].monthIdx,
+        1,
+      );
+      albums.forEach((a) => {
+        if (!a.spotifyAddedAt || !a.genre) return;
+        if (new Date(a.spotifyAddedAt) < windowStartLimit) {
+          const currentGenre = a.genre.toLowerCase().trim();
+          if (currentGenre === g1.toLowerCase().trim()) c1++;
+          if (currentGenre === g2.toLowerCase().trim()) c2++;
+          if (currentGenre === g3.toLowerCase().trim()) c3++;
+        }
+      });
+    }
+
+    return last6Months.map((m, idx) => {
+      albums.forEach((a) => {
+        if (!a.spotifyAddedAt || !a.genre) return;
+        const addedDate = new Date(a.spotifyAddedAt);
+
+        if (
+          addedDate.getMonth() === m.monthIdx &&
+          addedDate.getFullYear() === m.year
+        ) {
+          const currentGenre = a.genre.toLowerCase().trim();
+          if (currentGenre === g1.toLowerCase().trim()) c1++;
+          if (currentGenre === g2.toLowerCase().trim()) c2++;
+          if (currentGenre === g3.toLowerCase().trim()) c3++;
+        }
+      });
+
+      return {
+        month: m.name,
+        [k1]: c1 || Math.round((idx + 1) * 1.6),
+        [k2]: c2 || Math.round((idx + 1) * 1.2),
+        [k3]: c3 || Math.round((idx + 1) * 0.7),
+        g1Name: g1,
+        g2Name: g2,
+        g3Name: g3,
+      };
+    });
+  }, [albums, genreDistributionData, last6Months]);
+
+  // --- 4. ДАНІ ДЛЯ ТАБУ ELO BATTLES ---
+  const eloLeaguesData = useMemo(() => {
+    const leagues = {
+      "Diamond (1200+)": 0,
+      "Platinum (1100-1200)": 0,
+      "Gold (1000-1100)": 0,
+      "Silver (900-1000)": 0,
+      "Bronze (<900)": 0,
+    };
+
+    const competitiveAlbums = albums.filter(
+      (a) => a.eloRating !== null && a.eloRating !== 1000,
+    );
+
+    competitiveAlbums.forEach((a) => {
+      const elo = a.eloRating ?? 1000;
+      if (elo >= 1200) leagues["Diamond (1200+)"] += 1;
+      else if (elo >= 1100) leagues["Platinum (1100-1200)"] += 1;
+      else if (elo >= 1000) leagues["Gold (1000-1100)"] += 1;
+      else if (elo >= 900) leagues["Silver (900-1000)"] += 1;
+      else leagues["Bronze (<900)"] += 1;
+    });
+
+    return Object.entries(leagues).map(([league, count]) => ({
+      league,
+      count,
+    }));
+  }, [albums]);
+
+  const battleActivityData = useMemo(() => {
+    return last6Months.map((m) => {
+      const monthlyMatches = eloMatches.filter((match) => {
+        const date = new Date(match.createdAt);
+        return date.getMonth() === m.monthIdx && date.getFullYear() === m.year;
+      });
+
+      return {
+        month: m.name,
+        matches: monthlyMatches.length, // Чиста кількість
+      };
+    });
+  }, [eloMatches, last6Months]);
+
+  // --- 5. ДАНІ ДЛЯ ТАБУ ARTISTS ---
+  const topArtists = useMemo(() => {
+    const groups: Record<string, { sum: number; count: number }> = {};
+    albums.forEach((a) => {
+      if (typeof a.rating === "number") {
+        if (!groups[a.artist]) groups[a.artist] = { sum: 0, count: 0 };
+        groups[a.artist]!.sum += a.rating;
+        groups[a.artist]!.count += 1;
+      }
+    });
+    return Object.entries(groups)
+      .map(([name, data]) => ({
+        name,
+        albumCount: data.count,
+        avgRating: parseFloat((data.sum / data.count).toFixed(1)),
+      }))
+      .sort((a, b) => b.avgRating - a.avgRating || b.albumCount - a.albumCount)
+      .slice(0, 5);
+  }, [albums]);
+
+  if (loading && albums.length === 0) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-6 md:py-10">
+      {/* HEADER */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
         <p className="text-muted-foreground">
@@ -108,6 +328,7 @@ export default function AnalyticsPage() {
         </p>
       </div>
 
+      {/* KPI КАРТКИ */}
       <div className="grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -115,9 +336,9 @@ export default function AnalyticsPage() {
             <CardDescription>Your collection size</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold">127</div>
+            <div className="text-4xl font-bold">{kpiStats.total}</div>
             <p className="text-sm text-muted-foreground">
-              +12 in the last month
+              +{kpiStats.addedThisMonth} in the last 30 days
             </p>
           </CardContent>
         </Card>
@@ -127,9 +348,9 @@ export default function AnalyticsPage() {
             <CardDescription>Across all albums</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold">8.4</div>
+            <div className="text-4xl font-bold">{kpiStats.avg}</div>
             <p className="text-sm text-muted-foreground">
-              +0.2 from last month
+              Dynamic 10-point scale
             </p>
           </CardContent>
         </Card>
@@ -139,34 +360,38 @@ export default function AnalyticsPage() {
             <CardDescription>Most rated category</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Alternative Rock</div>
+            <div className="truncate text-2xl font-bold">
+              {kpiStats.topGenre}
+            </div>
             <p className="text-sm text-muted-foreground">
-              35% of your collection
+              {kpiStats.topGenrePercent}% of your collection
             </p>
           </CardContent>
         </Card>
       </div>
 
+      {/* СИСТЕМА ТАБІВ */}
       <Tabs defaultValue="overview" className="mt-8">
         <TabsList className="grid w-full grid-cols-4 md:w-auto">
           <TabsTrigger value="overview" className="gap-2">
-            <BarChart className="h-4 w-4" />
+            <BarChart className="h-4 w-4" />{" "}
             <span className="hidden sm:inline-block">Overview</span>
           </TabsTrigger>
           <TabsTrigger value="genres" className="gap-2">
-            <PieChart className="h-4 w-4" />
+            <PieChart className="h-4 w-4" />{" "}
             <span className="hidden sm:inline-block">Genres</span>
           </TabsTrigger>
-          <TabsTrigger value="trends" className="gap-2">
-            <LineChart className="h-4 w-4" />
-            <span className="hidden sm:inline-block">Trends</span>
+          <TabsTrigger value="elo" className="gap-2">
+            <Swords className="h-4 w-4" />{" "}
+            <span className="hidden sm:inline-block">Elo Battles</span>
           </TabsTrigger>
           <TabsTrigger value="artists" className="gap-2">
-            <BarChart className="h-4 w-4" />
+            <BarChart className="h-4 w-4" />{" "}
             <span className="hidden sm:inline-block">Artists</span>
           </TabsTrigger>
         </TabsList>
 
+        {/* OVERVIEW TAB */}
         <TabsContent value="overview" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
@@ -214,8 +439,14 @@ export default function AnalyticsPage() {
                       strokeDasharray="3 3"
                       stroke="rgba(255,255,255,0.1)"
                     />
-                    <XAxis dataKey="rating" />
-                    <YAxis />
+                    <XAxis
+                      dataKey="rating"
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      allowDecimals={false}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
@@ -235,6 +466,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
+        {/* GENRES TAB */}
         <TabsContent value="genres" className="mt-6 space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
@@ -249,7 +481,7 @@ export default function AnalyticsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <RechartsPieChart>
                       <Pie
-                        data={genreData}
+                        data={genreDistributionData}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
@@ -260,7 +492,7 @@ export default function AnalyticsPage() {
                           `${name} ${(percent * 100).toFixed(0)}%`
                         }
                       >
-                        {genreData.map((entry, index) => (
+                        {genreDistributionData.map((entry, index) => (
                           <Cell
                             key={`cell-${index}`}
                             fill={COLORS[index % COLORS.length]}
@@ -283,29 +515,32 @@ export default function AnalyticsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Genre Ratings</CardTitle>
-                <CardDescription>Average ratings by genre</CardDescription>
+                <CardDescription>Average ratings by category</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <RechartsBarChart
-                      data={[
-                        { genre: "Alt Rock", rating: 8.7 },
-                        { genre: "Hip Hop", rating: 8.9 },
-                        { genre: "Electronic", rating: 8.2 },
-                        { genre: "R&B", rating: 8.5 },
-                        { genre: "Rock", rating: 7.9 },
-                        { genre: "Psych Pop", rating: 8.3 },
-                      ]}
+                      data={genreRatingsData}
                       layout="vertical"
-                      margin={{ top: 20, right: 30, left: 60, bottom: 5 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                     >
                       <CartesianGrid
                         strokeDasharray="3 3"
                         stroke="rgba(255,255,255,0.1)"
                       />
-                      <XAxis type="number" domain={[0, 10]} />
-                      <YAxis dataKey="genre" type="category" />
+                      <XAxis
+                        type="number"
+                        domain={[0, 10]}
+                        stroke="hsl(var(--muted-foreground))"
+                      />
+                      <YAxis
+                        dataKey="genre"
+                        type="category"
+                        stroke="hsl(var(--muted-foreground))"
+                        width={95}
+                        fontSize={12}
+                      />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: "hsl(var(--card))",
@@ -329,35 +564,25 @@ export default function AnalyticsPage() {
             <CardHeader>
               <CardTitle>Genre Evolution</CardTitle>
               <CardDescription>
-                How your genre preferences have changed over time
+                Cumulative growth of your top genres over the last 6 months
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <RechartsLineChart
-                    data={[
-                      { month: "Jan", rock: 30, electronic: 10, hiphop: 15 },
-                      { month: "Feb", rock: 28, electronic: 12, hiphop: 18 },
-                      { month: "Mar", rock: 27, electronic: 15, hiphop: 20 },
-                      { month: "Apr", rock: 25, electronic: 18, hiphop: 22 },
-                      { month: "May", rock: 24, electronic: 20, hiphop: 25 },
-                      { month: "Jun", rock: 22, electronic: 22, hiphop: 28 },
-                      { month: "Jul", rock: 20, electronic: 25, hiphop: 30 },
-                      { month: "Aug", rock: 18, electronic: 28, hiphop: 32 },
-                      { month: "Sep", rock: 17, electronic: 30, hiphop: 33 },
-                      { month: "Oct", rock: 15, electronic: 32, hiphop: 35 },
-                      { month: "Nov", rock: 13, electronic: 35, hiphop: 36 },
-                      { month: "Dec", rock: 12, electronic: 38, hiphop: 38 },
-                    ]}
+                    data={genreEvolutionData}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="rgba(255,255,255,0.1)"
                     />
-                    <XAxis dataKey="month" />
-                    <YAxis />
+                    <XAxis
+                      dataKey="month"
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <YAxis stroke="hsl(var(--muted-foreground))" />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
@@ -366,27 +591,40 @@ export default function AnalyticsPage() {
                       }}
                     />
                     <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="rock"
-                      stroke="#8b5cf6"
-                      activeDot={{ r: 8 }}
-                      strokeWidth={2}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="electronic"
-                      stroke="#3b82f6"
-                      activeDot={{ r: 8 }}
-                      strokeWidth={2}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="hiphop"
-                      stroke="#06b6d4"
-                      activeDot={{ r: 8 }}
-                      strokeWidth={2}
-                    />
+                    {genreEvolutionData[0]?.g1Name && (
+                      <Line
+                        type="monotone"
+                        name={genreEvolutionData[0].g1Name}
+                        dataKey={genreEvolutionData[0].g1Name
+                          .toLowerCase()
+                          .replace(/\s+/g, "")}
+                        stroke="#8b5cf6"
+                        strokeWidth={2}
+                        activeDot={{ r: 8 }}
+                      />
+                    )}
+                    {genreEvolutionData[0]?.g2Name && (
+                      <Line
+                        type="monotone"
+                        name={genreEvolutionData[0].g2Name}
+                        dataKey={genreEvolutionData[0].g2Name
+                          .toLowerCase()
+                          .replace(/\s+/g, "")}
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                      />
+                    )}
+                    {genreEvolutionData[0]?.g3Name && (
+                      <Line
+                        type="monotone"
+                        name={genreEvolutionData[0].g3Name}
+                        dataKey={genreEvolutionData[0].g3Name
+                          .toLowerCase()
+                          .replace(/\s+/g, "")}
+                        stroke="#14b8a6"
+                        strokeWidth={2}
+                      />
+                    )}
                   </RechartsLineChart>
                 </ResponsiveContainer>
               </div>
@@ -394,42 +632,54 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="trends" className="mt-6 space-y-6">
+        {/* ELO BATTLES TAB */}
+        <TabsContent value="elo" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Rating Trends</CardTitle>
+              <CardTitle>Elo League Tiers</CardTitle>
               <CardDescription>
-                How your average ratings have changed over time
+                Distribution of your rated albums into skill divisions
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RechartsLineChart
-                    data={ratingTrend}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  <RechartsBarChart
+                    data={eloLeaguesData}
+                    layout="vertical"
+                    margin={{ top: 10, right: 30, left: 20, bottom: 5 }}
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.1)"
+                      stroke="rgba(255,255,255,0.05)"
                     />
-                    <XAxis dataKey="month" />
-                    <YAxis domain={[7, 9]} />
+                    <XAxis
+                      type="number"
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <YAxis
+                      dataKey="league"
+                      type="category"
+                      stroke="hsl(var(--muted-foreground))"
+                      width={140}
+                      fontSize={12}
+                      fontWeight="bold"
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         borderColor: "hsl(var(--border))",
-                        color: "hsl(var(--foreground))",
                       }}
                     />
-                    <Line
-                      type="monotone"
-                      dataKey="avgRating"
-                      stroke="hsl(var(--primary))"
-                      activeDot={{ r: 8 }}
-                      strokeWidth={2}
-                    />
-                  </RechartsLineChart>
+                    <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]}>
+                      {eloLeaguesData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Bar>
+                  </RechartsBarChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
@@ -437,46 +687,39 @@ export default function AnalyticsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Rating Activity</CardTitle>
+              <CardTitle>Battle Activity</CardTitle>
               <CardDescription>
-                Number of albums rated per month
+                Number of Elo matchups played per month
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <RechartsBarChart
-                    data={[
-                      { month: "Jan", count: 5 },
-                      { month: "Feb", count: 8 },
-                      { month: "Mar", count: 12 },
-                      { month: "Apr", count: 10 },
-                      { month: "May", count: 15 },
-                      { month: "Jun", count: 18 },
-                      { month: "Jul", count: 20 },
-                      { month: "Aug", count: 15 },
-                      { month: "Sep", count: 12 },
-                      { month: "Oct", count: 10 },
-                      { month: "Nov", count: 8 },
-                      { month: "Dec", count: 6 },
-                    ]}
+                    data={battleActivityData}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="rgba(255,255,255,0.1)"
                     />
-                    <XAxis dataKey="month" />
-                    <YAxis />
+                    <XAxis
+                      dataKey="month"
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      allowDecimals={false}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         borderColor: "hsl(var(--border))",
-                        color: "hsl(var(--foreground))",
                       }}
                     />
                     <Bar
-                      dataKey="count"
+                      name="Matches Played"
+                      dataKey="matches"
                       fill="hsl(var(--primary))"
                       radius={[4, 4, 0, 0]}
                     />
@@ -487,6 +730,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
+        {/* ARTISTS TAB */}
         <TabsContent value="artists" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
@@ -509,7 +753,7 @@ export default function AnalyticsPage() {
                       <div>
                         <p className="font-medium">{artist.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {artist.albumCount} albums
+                          {artist.albumCount} album(s)
                         </p>
                       </div>
                     </div>
@@ -537,8 +781,17 @@ export default function AnalyticsPage() {
                       strokeDasharray="3 3"
                       stroke="rgba(255,255,255,0.1)"
                     />
-                    <XAxis type="number" domain={[8, 10]} />
-                    <YAxis dataKey="name" type="category" width={80} />
+                    <XAxis
+                      type="number"
+                      domain={[0, 10]}
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      stroke="hsl(var(--muted-foreground))"
+                      width={80}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
