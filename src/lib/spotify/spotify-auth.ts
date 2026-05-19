@@ -226,6 +226,7 @@ class SpotifyAuthService {
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     sessionStorage.removeItem(EXPIRES_AT_KEY);
     sessionStorage.removeItem(STORAGE_KEY);
+    window.location.href = "/";
   }
 
   isAuthenticated() {

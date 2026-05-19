@@ -8,6 +8,7 @@ export const createTable = pgTableCreator((name) => `nerv-rnk_${name}`);
 export const users = createTable("user", (d) => ({
   spotifyId: d.text("spotify_id").primaryKey(),
   displayName: d.text("display_name"),
+  avatarUrl: d.text("avatar_url"),
   createdAt: d.timestamp("created_at").defaultNow().notNull(),
 }));
 

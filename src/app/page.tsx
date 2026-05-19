@@ -106,7 +106,7 @@ export default function Dashboard() {
       <div className="container mx-auto max-w-4xl px-4 py-16 md:py-24">
         <div className="flex flex-col items-center text-center space-y-6">
           <div className="rounded-2xl bg-primary/10 p-4 text-primary animate-pulse">
-            <Swords className="h-12 w-12" />
+            <Disc3 className="h-12 w-12" />
           </div>
           
           <div className="space-y-3 max-w-2xl">
