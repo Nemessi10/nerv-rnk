@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { formatDuration, formatAlbumDuration } from "~/lib/utils";
 
 import { ArrowLeft, Edit, Heart, Share2, Star, Loader2 } from "lucide-react";
-import { spotifyApi } from "~/lib/spotify/spotify-api";
 import { RateAlbumModal } from "~/components/rate-album-modal";
 import type { AlbumDetails } from "~/types/album";
 
@@ -44,26 +43,30 @@ export default function AlbumDetailPage({
       try {
         setLoading(true);
 
-        const spotifyPromise = spotifyApi.getAlbumDetails(albumId);
+        const detailsPromise = fetch(`/api/albums/${albumId}/details`).then((res) => {
+          if (!res.ok) throw new Error("API metadata failed");
+          return res.json() as Promise<AlbumDetails>;
+        });
+
         const ratingPromise = fetch(`/api/ratings/${albumId}`)
           .then((res) =>
             res.ok ? (res.json() as Promise<DBRatingResponse>) : null,
           )
           .catch(() => null);
 
-        const [spotifyData, ratingData] = await Promise.all([
-          spotifyPromise,
+        const [albumDetails, ratingData] = await Promise.all([
+          detailsPromise,
           ratingPromise,
         ]);
 
         if (isMounted) {
-          if (!spotifyData) {
+          if (!albumDetails) {
             setError("Album not found in Spotify");
             return;
           }
 
           setAlbum({
-            ...(spotifyData as AlbumDetails),
+            ...albumDetails,
             rating: ratingData?.rating ?? undefined,
             eloRating: ratingData?.eloRating ?? 1000,
           });

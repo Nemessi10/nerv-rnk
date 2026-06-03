@@ -1,5 +1,5 @@
 import { spotifyAuth } from "./spotify-auth";
-import { lastFmApi } from "../lastfm/lastfm-api";
+import { discogsApi } from "../discogs/discogs-api";
 import type { SpotifyLibraryItem } from "~/types/spotify";
 
 import type {
@@ -104,7 +104,7 @@ class SpotifyApiService {
       offset += limit;
     }
 
-    const albums = allItems.map((item) => ({
+    const baseAlbums = allItems.map((item) => ({
       id: item.album.id,
       title: item.album.name,
       artist: item.album.artists[0]?.name ?? "Unknown Artist",
@@ -114,32 +114,22 @@ class SpotifyApiService {
       addedAt: item.added_at,
     }));
 
-    const uniqueArtists = [...new Set(albums.map((album) => album.artist))];
+    const enrichedAlbums: AppAlbum[] = [];
 
-    const artistGenresMap = new Map<string, string[]>();
+    for (const album of baseAlbums) {
+      const discogsData = await discogsApi.getAlbumGenres(album.artist, album.title);
 
-    await Promise.all(
-      uniqueArtists.map(async (artist) => {
-        try {
-          const tags = await lastFmApi.getArtistTags(artist);
-          artistGenresMap.set(artist, tags);
-        } catch {
-          artistGenresMap.set(artist, []);
-        }
-      }),
-    );
-
-    return albums.map((album) => {
-      const tags = artistGenresMap.get(album.artist) ?? [];
-
-      return {
+      enrichedAlbums.push({
         ...album,
+        genre: discogsData.genre,
+        subgenres: discogsData.subgenres,
+      });
 
-        genre: tags[0] ?? "Unknown",
+      // 100-millisecond micro-pause between requests to comply with Discogs API limits
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 
-        subgenres: tags.slice(1),
-      };
-    });
+    return enrichedAlbums;
   }
 
   clearCache() {
@@ -180,31 +170,19 @@ class SpotifyApiService {
 
   async getAlbumDetails(id: string) {
     const album = await this.getAlbum(id);
-
     const artistName = album.artists[0]?.name ?? "Unknown Artist";
 
-    let genres: string[] = [];
-
-    try {
-      genres = await lastFmApi.getArtistTags(artistName);
-    } catch (err) {
-      console.error("LAST.FM ERROR:", artistName, err);
-    }
+    const discogsData = await discogsApi.getAlbumGenres(artistName, album.name);
 
     return {
       id: album.id,
-
       title: album.name,
-
       artist: album.artists[0]?.name ?? "Unknown Artist",
-
       cover: album.images?.[0]?.url ?? "/placeholder.png",
-
       year: album.release_date?.slice(0, 4) ?? "Unknown",
 
-      genre: genres[0] ?? "Unknown",
-
-      subgenres: genres.slice(1),
+      genre: discogsData.genre,
+      subgenres: discogsData.subgenres,
 
       tracks:
         album.tracks?.items?.map((track) => ({

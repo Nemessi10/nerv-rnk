@@ -28,9 +28,6 @@ It syncs with your **Spotify** account (via OAuth2) and provides an intuitive in
 
 > 🚧 Currently in development
 
-* Frontend being prototyped with **mock data**
-* Core UI elements and theme system in place
-
 ---
 
 ## 🚀 Why nerv-rnk?
@@ -54,7 +51,7 @@ This project aims to offer something no major streaming platform provides — ac
 - [x] Album rating functionality (ELO + classic)
 - [x] Advanced filtering in Library (genre, mood, custom tags)
 - [ ] Genre and mood tagging (user editable)
-- [ ] Analytics dashboard (top genres, trends, activity)
+- [x] Analytics dashboard (top genres, trends, activity)
 - [ ] Mobile-friendly layout (future)
 - [ ] Recommendation engine (future)
 
