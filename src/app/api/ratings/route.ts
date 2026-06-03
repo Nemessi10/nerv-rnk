@@ -1,19 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { db } from "~/server/db";
 import { albums, ratings, users } from "~/server/db/schema";
+import type { RatingRequestBody, SpotifyUserResponse } from "~/types/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as RatingRequestBody;
     const { album, rating } = body;
 
     if (!album || typeof rating !== "number") {
-      return NextResponse.json({ error: "Missing album or rating" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing album or rating" },
+        { status: 400 },
+      );
     }
 
-    // 1. Отримуємо токен з кук
     const cookieStore = await cookies();
     const token = cookieStore.get("spotify_at")?.value;
 
@@ -21,19 +25,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Отримуємо користувача прямо через fetch (без spotifyApi)
     const userRes = await fetch("https://api.spotify.com/v1/me", {
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!userRes.ok) {
-      return NextResponse.json({ error: "Spotify auth failed" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Spotify auth failed" },
+        { status: 401 },
+      );
     }
 
-    const spotifyUser = await userRes.json();
+    const spotifyUser = (await userRes.json()) as SpotifyUserResponse;
     const spotifyId = spotifyUser.id;
 
-    // 3. Перевіряємо користувача в нашій БД
     const user = await db
       .select()
       .from(users)
@@ -44,7 +49,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not synced" }, { status: 401 });
     }
 
-    // 4. Оновлюємо/створюємо альбом
     await db
       .insert(albums)
       .values({
@@ -65,7 +69,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-    // 5. Оновлюємо рейтинг
     const existingRating = await db
       .select()
       .from(ratings)
@@ -102,6 +105,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, rating });
   } catch (err) {
     console.error("RATING ERROR:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

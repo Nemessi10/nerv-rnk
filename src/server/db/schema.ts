@@ -34,7 +34,7 @@ export const ratings = createTable(
       .text("user_id")
       .notNull()
       .references(() => users.spotifyId),
-      albumSpotifyId: d
+    albumSpotifyId: d
       .text("album_id")
       .notNull()
       .references(() => albums.spotifyId),

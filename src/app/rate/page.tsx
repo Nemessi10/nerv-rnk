@@ -19,13 +19,13 @@ import {
   Swords,
 } from "lucide-react";
 import { useSpotifyLibrary } from "~/hooks/use-spotify-library";
+import type { AppAlbum } from "~/types/album";
 
 type RateMode = "unrated" | "random" | "re-rate";
 
 export default function RatePage() {
   const { albums, loading, refresh } = useSpotifyLibrary();
 
-  // --- CLASSIC RATING STATES ---
   const [rateMode, setRateMode] = useState<RateMode>("unrated");
   const [modeIndices, setModeIndices] = useState<Record<RateMode, number>>({
     unrated: 0,
@@ -33,7 +33,6 @@ export default function RatePage() {
     "re-rate": 0,
   });
 
-  // Стан для обраного вручну альбому (тепер він теж прив'язаний до режиму)
   const [selectedAlbumIds, setSelectedAlbumIds] = useState<
     Record<RateMode, string | null>
   >({
@@ -51,8 +50,7 @@ export default function RatePage() {
 
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // --- ELO STATES ---
-  const [eloPair, setEloPair] = useState<any[]>([]);
+  const [eloPair, setEloPair] = useState<AppAlbum[]>([]);
   const [isEloLoading, setIsEloLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState("classic");
@@ -126,12 +124,11 @@ export default function RatePage() {
     }
   };
 
-  // --- ELO LOGIC ---
   const fetchEloMatchup = async () => {
     setIsEloLoading(true);
     try {
       const res = await fetch("/api/ratings/elo/matchup");
-      const data = await res.json();
+      const data = (await res.json()) as AppAlbum[];
       setEloPair(data);
     } catch (err) {
       console.error(err);
@@ -158,9 +155,10 @@ export default function RatePage() {
   };
 
   useEffect(() => {
-    if (activeTab === "elo" && eloPair.length === 0 && !loading)
-      fetchEloMatchup();
-  }, [activeTab, loading]);
+    if (activeTab === "elo" && eloPair.length === 0 && !loading) {
+      void fetchEloMatchup();
+    }
+  }, [activeTab, loading, eloPair.length]);
 
   if (loading && albums.length === 0)
     return (
@@ -171,7 +169,6 @@ export default function RatePage() {
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
-      {/* MINIMALIST TABS & HEADER */}
       <div className="mb-12 flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
         <div className="space-y-1">
           <h1 className="text-4xl font-black tracking-tighter">
@@ -207,7 +204,6 @@ export default function RatePage() {
           </div>
         </div>
 
-        {/* ПРИХОВУЄМО МОДИ, ЯКЩО МИ В ELO */}
         {activeTab === "classic" && (
           <div className="flex gap-1.5 rounded-xl border border-border/40 bg-secondary/15 p-1">
             {[
@@ -232,13 +228,11 @@ export default function RatePage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        {/* CLASSIC TAB */}
         <TabsContent
           value="classic"
           className="mt-0 border-0 p-0 focus-visible:ring-0"
         >
           <div className="grid grid-cols-1 gap-12 xl:grid-cols-12">
-            {/* LEFT COLUMN: CANVAS */}
             <div className="xl:col-span-7">
               <div className="group relative aspect-square">
                 <Card className="h-full overflow-hidden rounded-[32px] border-0 bg-transparent shadow-none">
@@ -254,9 +248,9 @@ export default function RatePage() {
 
                   <div className="absolute inset-0 flex items-center justify-between px-6 opacity-0 transition-opacity group-hover:opacity-100">
                     <Button
-                      variant="black/40"
+                      variant="outline"
                       size="icon"
-                      className="h-12 w-12 rounded-full backdrop-blur-md"
+                      className="h-12 w-12 rounded-full border-0 bg-black/40 backdrop-blur-md hover:bg-black/60"
                       onClick={() =>
                         updateIndex(
                           modeIndices[rateMode] > 0
@@ -268,9 +262,9 @@ export default function RatePage() {
                       <ChevronLeft className="h-6 w-6 text-white" />
                     </Button>
                     <Button
-                      variant="black/40"
+                      variant="outline"
                       size="icon"
-                      className="h-12 w-12 rounded-full backdrop-blur-md"
+                      className="h-12 w-12 rounded-full border-0 bg-black/40 backdrop-blur-md hover:bg-black/60"
                       onClick={() =>
                         updateIndex(
                           modeIndices[rateMode] < queue.length - 1
@@ -286,9 +280,7 @@ export default function RatePage() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN: CONTROLS */}
             <div className="flex flex-col justify-center space-y-8 xl:col-span-5">
-              {/* SEARCH */}
               <div className="relative" ref={searchRef}>
                 <div
                   className={`flex items-center gap-3 rounded-xl border bg-secondary/30 px-4 py-3 transition-all ${isSearchFocused ? "border-primary" : "border-transparent"}`}
@@ -333,7 +325,8 @@ export default function RatePage() {
                               {result.title}
                             </p>
                             <p className="truncate text-[10px] text-muted-foreground">
-                              {result.artist} • {result.year ? result.year.slice(0, 4) : "—"}
+                              {result.artist} •{" "}
+                              {result.year ? result.year.slice(0, 4) : "—"}
                             </p>
                           </div>
                         </button>
@@ -345,7 +338,6 @@ export default function RatePage() {
 
               {currentAlbum ? (
                 <div className="space-y-6">
-                  {/* META INFO */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Badge
@@ -391,7 +383,6 @@ export default function RatePage() {
                     </Button>
                   </div>
 
-                  {/* RATING DASHBOARD */}
                   <div className="space-y-6 rounded-[24px] border border-border/40 bg-secondary/10 p-8">
                     <div className="flex items-baseline justify-between">
                       <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
@@ -466,7 +457,6 @@ export default function RatePage() {
           </div>
         </TabsContent>
 
-        {/* ELO MATCHUP TAB */}
         <TabsContent
           value="elo"
           className="mt-0 border-0 p-0 focus-visible:ring-0"
@@ -484,65 +474,62 @@ export default function RatePage() {
             <div className="relative grid w-full max-w-full items-center gap-6 px-4 md:grid-cols-11">
               {eloPair.length === 2 ? (
                 <>
-                  {/* ALBUM A */}
                   <div className="md:col-span-5">
                     <button
                       disabled={isEloLoading}
-                      onClick={() =>
-                        handleEloVote(eloPair[0].id, eloPair[1].id)
-                      }
+                      onClick={() => {
+                        void handleEloVote(eloPair[0]!.id, eloPair[1]!.id);
+                      }}
                       className="group relative w-full overflow-hidden transition-all hover:ring-4 hover:ring-primary/40 active:scale-[0.98]"
                     >
                       <div className="relative aspect-square">
                         <Image
-                          src={eloPair[0].cover}
-                          alt={eloPair[0].title}
+                          src={eloPair[0]!.cover}
+                          alt={eloPair[0]!.title}
                           fill
                           className="object-cover transition-transform group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                         <div className="absolute bottom-6 left-6 right-6 text-left text-white opacity-0 transition-all group-hover:opacity-100">
                           <p className="line-clamp-1 text-xl font-black uppercase tracking-tighter">
-                            {eloPair[0].title}
+                            {eloPair[0]!.title}
                           </p>
                           <p className="text-xs font-bold opacity-70">
-                            {eloPair[0].artist}
+                            {eloPair[0]!.artist}
                           </p>
                         </div>
                       </div>
                     </button>
                   </div>
 
-                  {/* VS DIVIDER */}
                   <div className="flex items-center justify-center md:col-span-1">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl">
                       <Swords className="h-6 w-6" />
                     </div>
                   </div>
 
-                  {/* ALBUM B */}
                   <div className="md:col-span-5">
                     <button
                       disabled={isEloLoading}
-                      onClick={() =>
-                        handleEloVote(eloPair[1].id, eloPair[0].id)
-                      }
+                      onClick={() => {
+                        void handleEloVote(eloPair[1]!.id, eloPair[0]!.id);
+                      }}
                       className="group relative w-full overflow-hidden transition-all hover:ring-4 hover:ring-primary/40 active:scale-[0.98]"
                     >
                       <div className="relative aspect-square">
                         <Image
-                          src={eloPair[1].cover}
-                          alt={eloPair[1].title}
+                          src={eloPair[1]!.cover}
+                          alt={eloPair[1]!.title}
                           fill
                           className="object-cover transition-transform group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                         <div className="absolute bottom-6 left-6 right-6 text-left text-white opacity-0 transition-all group-hover:opacity-100">
                           <p className="line-clamp-1 text-xl font-black uppercase tracking-tighter">
-                            {eloPair[1].title}
+                            {eloPair[1]!.title}
                           </p>
                           <p className="text-xs font-bold opacity-70">
-                            {eloPair[1].artist}
+                            {eloPair[1]!.artist}
                           </p>
                         </div>
                       </div>

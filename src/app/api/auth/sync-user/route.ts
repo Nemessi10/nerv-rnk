@@ -1,14 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "~/server/db";
 import { users } from "~/server/db/schema";
+import type { SpotifyUser } from "~/types/spotify";
+import type { SyncUserRequestBody } from "~/types/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const { accessToken } = await req.json();
+    const { accessToken } = (await req.json()) as SyncUserRequestBody;
 
     if (!accessToken) {
-      return NextResponse.json({ error: "Missing accessToken" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing accessToken" },
+        { status: 400 },
+      );
     }
 
     const spotifyRes = await fetch("https://api.spotify.com/v1/me", {
@@ -16,16 +22,20 @@ export async function POST(req: NextRequest) {
     });
 
     if (!spotifyRes.ok) {
-      return NextResponse.json({ error: "Failed to fetch Spotify profile" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Failed to fetch Spotify profile" },
+        { status: 401 },
+      );
     }
 
-    const spotifyUser = await spotifyRes.json();
+    const spotifyUser = (await spotifyRes.json()) as SpotifyUser;
     const spotifyId = spotifyUser.id;
     const displayName = spotifyUser.display_name;
-    
-    const avatarUrl = spotifyUser.images && spotifyUser.images.length > 0 
-      ? spotifyUser.images[0].url 
-      : null;
+
+    const avatarUrl =
+      spotifyUser.images && spotifyUser.images.length > 0
+        ? (spotifyUser.images[0]?.url ?? null)
+        : null;
 
     const cookieStore = await cookies();
     cookieStore.set("spotify_user_id", spotifyId, {
@@ -34,7 +44,6 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       sameSite: "lax",
     });
-
     await db
       .insert(users)
       .values({
@@ -58,6 +67,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("SYNC USER ERROR:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

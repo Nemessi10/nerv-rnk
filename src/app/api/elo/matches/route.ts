@@ -18,9 +18,12 @@ export async function GET() {
       .from(eloMatches)
       .where(eq(eloMatches.userSpotifyId, userId))
       .orderBy(desc(eloMatches.createdAt));
-      
+
     return NextResponse.json(matches);
-  } catch (err) {
-    return NextResponse.json({ error: "Failed to fetch matches" }, { status: 500 });
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to fetch matches" },
+      { status: 500 },
+    );
   }
 }

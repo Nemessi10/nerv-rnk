@@ -7,7 +7,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const init = useAuthStore((s) => s.init);
 
   useEffect(() => {
-    init();
+    void init();
   }, [init]);
 
   return <>{children}</>;

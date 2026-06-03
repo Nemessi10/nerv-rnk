@@ -6,7 +6,6 @@ import { ThemeProvider } from "~/components/theme-provider";
 import { TopNav } from "~/components/top-nav";
 import { AuthProvider } from "~/providers/auth-provider";
 
-
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -25,17 +24,17 @@ export default function RootLayout({
         className={`${inter.className} bg-background text-foreground antialiased`}
       >
         <AuthProvider>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="nerv-dark"
-          enableSystem={false}
-          themes={["nerv-dark", "nerv-wave"]}
-        >
-          <div className="flex min-h-screen flex-col">
-            <TopNav />
-            <main className="flex-1 pt-16">{children}</main>
-          </div>
-        </ThemeProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="nerv-dark"
+            enableSystem={false}
+            themes={["nerv-dark", "nerv-wave"]}
+          >
+            <div className="flex min-h-screen flex-col">
+              <TopNav />
+              <main className="flex-1 pt-16">{children}</main>
+            </div>
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>

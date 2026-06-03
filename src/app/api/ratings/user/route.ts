@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { eq, and } from "drizzle-orm";
 import { db } from "~/server/db";
@@ -34,13 +34,16 @@ export async function GET() {
         ratings,
         and(
           eq(ratings.albumSpotifyId, albums.spotifyId),
-          eq(ratings.userSpotifyId, userId)
-        )
+          eq(ratings.userSpotifyId, userId),
+        ),
       );
 
     return NextResponse.json(userLibrary);
   } catch (err) {
     console.error("Fetch user library error:", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

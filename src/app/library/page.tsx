@@ -69,9 +69,9 @@ export default function LibraryPage() {
         "classic",
         "added",
         "played",
-      ];
-      if (savedSort && validSorts.includes(savedSort)) {
-        return savedSort as any;
+      ] as const;
+      if (savedSort && (validSorts as readonly string[]).includes(savedSort)) {
+        return savedSort as (typeof validSorts)[number];
       }
     }
     return "played";
@@ -102,15 +102,27 @@ export default function LibraryPage() {
   }, [searchQuery, selectedGenre, selectedSubgenre, selectedMood, minRating]);
 
   const genres = useMemo(() => {
-    return [...new Set(albums.map((a) => a.genre).filter(Boolean))];
+    return [
+      ...new Set(albums.map((a) => a.genre).filter((g): g is string => !!g)),
+    ];
   }, [albums]);
 
   const subgenres = useMemo(() => {
-    return [...new Set(albums.flatMap((a) => a.subgenres ?? []))];
+    return [
+      ...new Set(
+        albums
+          .flatMap((a) => a.subgenres ?? [])
+          .filter((s): s is string => !!s),
+      ),
+    ];
   }, [albums]);
 
   const moods = useMemo(() => {
-    return [...new Set(albums.flatMap((a) => a.moods ?? []))];
+    return [
+      ...new Set(
+        albums.flatMap((a) => a.moods ?? []).filter((m): m is string => !!m),
+      ),
+    ];
   }, [albums]);
 
   const sortedAndFilteredAlbums = useMemo(() => {
@@ -296,7 +308,6 @@ export default function LibraryPage() {
 
   return (
     <div className="container mx-auto px-4 py-6 md:py-10">
-      {/* HEADER */}
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-3xl font-bold">Your Library</h1>
@@ -318,7 +329,6 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {/* SEARCH + CONTROLS */}
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row">
         <div className="flex flex-1 gap-2">
           <div className="relative flex-1">
@@ -408,7 +418,6 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {/* FILTERS */}
       {showFilters && (
         <Card className="mb-6">
           <CardContent className="grid gap-4 p-4 sm:grid-cols-4">
@@ -483,7 +492,6 @@ export default function LibraryPage() {
         </Card>
       )}
 
-      {/* TABS */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
         <TabsList>
           <TabsTrigger value="all">All Albums</TabsTrigger>
@@ -493,7 +501,6 @@ export default function LibraryPage() {
         </TabsList>
       </Tabs>
 
-      {/* GRID VIEW */}
       {viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {sortedAndFilteredAlbums.map((album: AppAlbum) => (
@@ -545,7 +552,6 @@ export default function LibraryPage() {
           ))}
         </div>
       ) : (
-        /* LIST VIEW */
         <div className="space-y-2">
           {sortedAndFilteredAlbums.map((album: AppAlbum) => (
             <Link href={`/album/${album.id}`} key={album.id}>

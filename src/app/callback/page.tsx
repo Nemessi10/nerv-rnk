@@ -31,8 +31,12 @@ export default function CallbackPage() {
       }
     };
 
-    handle();
+    void handle();
   }, [searchParams, init, router]);
 
-  return <div className="flex min-h-screen items-center justify-center">Connecting Spotify...</div>;
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      Connecting Spotify...
+    </div>
+  );
 }

@@ -1,4 +1,3 @@
-// src/app/analytics/page.tsx
 "use client";
 
 import { useMemo } from "react";
@@ -11,7 +10,7 @@ import {
 } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Badge } from "~/components/ui/badge";
-import { BarChart, LineChart, PieChart, Loader2, Swords } from "lucide-react";
+import { BarChart, PieChart, Loader2, Swords } from "lucide-react";
 import {
   BarChart as RechartsBarChart,
   Bar,
@@ -30,7 +29,6 @@ import {
 
 import { useSpotifyLibrary } from "~/hooks/use-spotify-library";
 import { useEloMatches } from "~/hooks/use-elo-matches";
-import type { EloMatch } from "~/types/elo";
 
 const COLORS = [
   "#8b5cf6",
@@ -57,9 +55,8 @@ const ALL_MONTHS = [
 
 export default function AnalyticsPage() {
   const { albums, loading } = useSpotifyLibrary();
-  const { matches: eloMatches, loading: matchesLoading } = useEloMatches();
+  const { matches: eloMatches } = useEloMatches();
 
-  // --- 0. ДИНАМІЧНЕ ОБЧИСЛЕННЯ ОСТАННІХ 6 МІСЯЦІВ ---
   const last6Months = useMemo(() => {
     const result = [];
     const now = new Date();
@@ -75,7 +72,6 @@ export default function AnalyticsPage() {
     return result;
   }, []);
 
-  // --- 1. ОБЧИСЛЕННЯ ДЛЯ KPI КАРТОК (ВЕРХНЯ ПАНЕЛЬ) ---
   const kpiStats = useMemo(() => {
     const total = albums.length;
     const rated = albums.filter((a) => typeof a.rating === "number");
@@ -117,7 +113,6 @@ export default function AnalyticsPage() {
     };
   }, [albums]);
 
-  // --- 2. ДАНІ ДЛЯ ТАБУ OVERVIEW ---
   const topAlbums = useMemo(() => {
     return [...albums]
       .filter((a) => typeof a.rating === "number")
@@ -156,7 +151,6 @@ export default function AnalyticsPage() {
       .reverse();
   }, [albums]);
 
-  // --- 3. ДАНІ ДЛЯ ТАБУ GENRES ---
   const genreDistributionData = useMemo(() => {
     const counts: Record<string, number> = {};
     albums.forEach((a) => {
@@ -174,7 +168,7 @@ export default function AnalyticsPage() {
     const groups: Record<string, { sum: number; count: number }> = {};
     albums.forEach((a) => {
       if (typeof a.rating === "number" && a.genre && a.genre !== "Unknown") {
-        if (!groups[a.genre]) groups[a.genre] = { sum: 0, count: 0 };
+        groups[a.genre] ??= { sum: 0, count: 0 };
         groups[a.genre]!.sum += a.rating;
         groups[a.genre]!.count += 1;
       }
@@ -190,9 +184,9 @@ export default function AnalyticsPage() {
 
   const genreEvolutionData = useMemo(() => {
     const top3Genres = genreDistributionData.slice(0, 3).map((g) => g.name);
-    const g1 = top3Genres[0] || "Rock";
-    const g2 = top3Genres[1] || "Electronic";
-    const g3 = top3Genres[2] || "Hip Hop";
+    const g1 = top3Genres[0] ?? "Rock";
+    const g2 = top3Genres[1] ?? "Electronic";
+    const g3 = top3Genres[2] ?? "Hip Hop";
 
     const k1 = g1.toLowerCase().replace(/\s+/g, "");
     const k2 = g2.toLowerCase().replace(/\s+/g, "");
@@ -247,7 +241,6 @@ export default function AnalyticsPage() {
     });
   }, [albums, genreDistributionData, last6Months]);
 
-  // --- 4. ДАНІ ДЛЯ ТАБУ ELO BATTLES ---
   const eloLeaguesData = useMemo(() => {
     const leagues = {
       "Diamond (1200+)": 0,
@@ -285,17 +278,16 @@ export default function AnalyticsPage() {
 
       return {
         month: m.name,
-        matches: monthlyMatches.length, // Чиста кількість
+        matches: monthlyMatches.length,
       };
     });
   }, [eloMatches, last6Months]);
 
-  // --- 5. ДАНІ ДЛЯ ТАБУ ARTISTS ---
   const topArtists = useMemo(() => {
     const groups: Record<string, { sum: number; count: number }> = {};
     albums.forEach((a) => {
       if (typeof a.rating === "number") {
-        if (!groups[a.artist]) groups[a.artist] = { sum: 0, count: 0 };
+        groups[a.artist] ??= { sum: 0, count: 0 };
         groups[a.artist]!.sum += a.rating;
         groups[a.artist]!.count += 1;
       }
@@ -320,7 +312,6 @@ export default function AnalyticsPage() {
 
   return (
     <div className="container mx-auto px-4 py-6 md:py-10">
-      {/* HEADER */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
         <p className="text-muted-foreground">
@@ -328,7 +319,6 @@ export default function AnalyticsPage() {
         </p>
       </div>
 
-      {/* KPI КАРТКИ */}
       <div className="grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -370,7 +360,6 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      {/* СИСТЕМА ТАБІВ */}
       <Tabs defaultValue="overview" className="mt-8">
         <TabsList className="grid w-full grid-cols-4 md:w-auto">
           <TabsTrigger value="overview" className="gap-2">
@@ -391,7 +380,6 @@ export default function AnalyticsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* OVERVIEW TAB */}
         <TabsContent value="overview" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
@@ -466,7 +454,6 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        {/* GENRES TAB */}
         <TabsContent value="genres" className="mt-6 space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
@@ -632,7 +619,6 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        {/* ELO BATTLES TAB */}
         <TabsContent value="elo" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
@@ -730,7 +716,6 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        {/* ARTISTS TAB */}
         <TabsContent value="artists" className="mt-6 space-y-6">
           <Card>
             <CardHeader>

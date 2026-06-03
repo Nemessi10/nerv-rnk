@@ -1,5 +1,6 @@
 import { spotifyAuth } from "./spotify-auth";
 import { lastFmApi } from "../lastfm/lastfm-api";
+import type { SpotifyLibraryItem } from "~/types/spotify";
 
 import type {
   SpotifyAlbum,
@@ -43,26 +44,35 @@ class SpotifyApiService {
       if (!newToken) throw new Error("Unable to refresh token");
       res = await fetch(`${this.BASE_URL}${url}`, {
         method: "GET",
-        headers: { Authorization: `Bearer ${newToken}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${newToken}`,
+          "Content-Type": "application/json",
+        },
       });
     }
 
     const text = await res.text();
 
-    let data: any = null;
+    let data: T | null = null;
 
     try {
-      data = text ? JSON.parse(text) : null;
+      data = text ? (JSON.parse(text) as T) : null;
     } catch {
       console.error("FAILED TO PARSE JSON:", text);
     }
 
     if (!res.ok) {
-      if (res.status === 429) throw new Error("Spotify API error 429: Too Many Requests");
-      throw new Error(data?.error?.message ?? `Spotify API error ${res.status}`);
+      if (res.status === 429)
+        throw new Error("Spotify API error 429: Too Many Requests");
+      const errorMessage =
+        data && typeof data === "object" && "error" in data
+          ? (data.error as { message?: string })?.message
+          : undefined;
+
+      throw new Error(errorMessage ?? `Spotify API error ${res.status}`);
     }
 
-    return data;
+    return data as T;
   }
 
   async getCurrentUser(): Promise<SpotifyUser> {
@@ -80,20 +90,20 @@ class SpotifyApiService {
   }
 
   async getUserAlbums(): Promise<AppAlbum[]> {
-    let allItems: { album: SpotifyAlbum; added_at: string }[] = [];
+    let allItems: SpotifyLibraryItem[] = [];
 
     let offset = 0;
     const limit = 50;
 
-    // FETCH ALL SAVED ALBUMS
     while (true) {
-      const data = await this.request<{ items: any[] }>(`/me/albums?limit=${limit}&offset=${offset}`);
+      const data = await this.request<{ items: SpotifyLibraryItem[] }>(
+        `/me/albums?limit=${limit}&offset=${offset}`,
+      );
       allItems = [...allItems, ...data.items];
       if (data.items.length < limit) break;
       offset += limit;
     }
 
-    // MAP SPOTIFY DATA
     const albums = allItems.map((item) => ({
       id: item.album.id,
       title: item.album.name,
@@ -104,10 +114,8 @@ class SpotifyApiService {
       addedAt: item.added_at,
     }));
 
-    // UNIQUE ARTISTS
     const uniqueArtists = [...new Set(albums.map((album) => album.artist))];
 
-    // FETCH LAST.FM TAGS
     const artistGenresMap = new Map<string, string[]>();
 
     await Promise.all(
@@ -118,10 +126,9 @@ class SpotifyApiService {
         } catch {
           artistGenresMap.set(artist, []);
         }
-      })
+      }),
     );
 
-    // ENRICH ALBUMS
     return albums.map((album) => {
       const tags = artistGenresMap.get(album.artist) ?? [];
 
@@ -157,13 +164,8 @@ class SpotifyApiService {
 
     for (const id of ids) {
       try {
-        // console.log("FETCHING ARTIST:", id);
-
         const artist = await this.getArtist(id);
-
         results.push(artist);
-
-        // console.log("SUCCESS:", id, artist.name);
       } catch (err) {
         console.error("FAILED ARTIST:", id, err);
       }

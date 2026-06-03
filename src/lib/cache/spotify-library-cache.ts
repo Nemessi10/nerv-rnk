@@ -15,7 +15,7 @@ export const getCachedLibrary = (): AppAlbum[] | null => {
   if (!raw) return null;
 
   try {
-    const parsed: CachedData = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as CachedData;
 
     const isExpired = Date.now() - parsed.timestamp > CACHE_TTL;
 

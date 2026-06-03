@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "~/server/db";
 import { ratings } from "~/server/db/schema";
-import { eq, desc, isNotNull } from "drizzle-orm";
+import { eq, desc, isNotNull, and } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -16,13 +16,12 @@ export async function GET() {
     const rawRatings = await db
       .select()
       .from(ratings)
-      .where(eq(ratings.userSpotifyId, userId)) 
-      .where(isNotNull(ratings.rating)) 
+      .where(and(eq(ratings.userSpotifyId, userId), isNotNull(ratings.rating)))
       .orderBy(desc(ratings.createdAt))
-      .limit(30); 
+      .limit(30);
 
-    const uniqueRatingsMap = new Map<string, typeof rawRatings[number]>();
-    
+    const uniqueRatingsMap = new Map<string, (typeof rawRatings)[number]>();
+
     for (const r of rawRatings) {
       if (r.albumSpotifyId && !uniqueRatingsMap.has(r.albumSpotifyId)) {
         uniqueRatingsMap.set(r.albumSpotifyId, r);
@@ -33,12 +32,18 @@ export async function GET() {
     const formattedData = Array.from(uniqueRatingsMap.values()).map((r) => ({
       albumId: r.albumSpotifyId,
       rating: Number(r.rating),
-      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+      createdAt:
+        r.createdAt instanceof Date
+          ? r.createdAt.toISOString()
+          : String(r.createdAt),
     }));
 
     return NextResponse.json(formattedData);
   } catch (err) {
     console.error("CRITICAL ERROR IN /api/ratings/recent:", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

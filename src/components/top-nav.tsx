@@ -1,4 +1,3 @@
-// src/components/top-nav.tsx
 "use client";
 
 import { useState } from "react";
@@ -19,7 +18,7 @@ import {
   Moon,
   Sun,
   Palette,
-  Music, // 💡 Додано іконку ноти для відповідності стилю роутів
+  Music,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -42,20 +41,29 @@ export function TopNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { theme, setTheme } = useTheme();
-  
+
   const { isLoggedIn, login, logout, user } = useAuth();
 
   const userName = user?.display_name ?? "Music Fan";
-  
-  const userAvatar = user?.images && user?.images.length > 0 
-    ? user.images[0].url 
-    : null;
+
+  const userAvatar =
+    user?.images && user?.images.length > 0 ? user.images[0]?.url : null;
 
   const availableThemes = [
     { id: "light", name: "Light Mode", icon: Sun, color: "text-amber-500" },
     { id: "dark", name: "Dark Mode", icon: Moon, color: "text-indigo-500" },
-    { id: "nerv-dark", name: "nerv-dark", icon: Palette, color: "text-primary" },
-    { id: "nerv-wave", name: "nerv-wave", icon: Palette, color: "text-sky-500" },
+    {
+      id: "nerv-dark",
+      name: "nerv-dark",
+      icon: Palette,
+      color: "text-primary",
+    },
+    {
+      id: "nerv-wave",
+      name: "nerv-wave",
+      icon: Palette,
+      color: "text-sky-500",
+    },
   ];
 
   const routes = [
@@ -76,7 +84,6 @@ export function TopNav() {
           </Link>
         </div>
 
-        {/* Desktop Navigation */}
         <nav className="hidden items-center space-x-1 md:flex">
           {routes.map((route) => (
             <Link
@@ -99,14 +106,14 @@ export function TopNav() {
           {isLoggedIn ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  className="relative h-9 w-9 rounded-full bg-card p-0 overflow-hidden border border-secondary/10 focus-visible:ring-0 focus-visible:ring-offset-0 select-none hover:bg-card active:scale-95 transition-transform"
+                <Button
+                  variant="ghost"
+                  className="relative h-9 w-9 select-none overflow-hidden rounded-full border border-secondary/10 bg-card p-0 transition-transform hover:bg-card focus-visible:ring-0 focus-visible:ring-offset-0 active:scale-95"
                 >
                   {userAvatar ? (
-                    <Image 
-                      src={userAvatar} 
-                      alt={userName} 
+                    <Image
+                      src={userAvatar}
+                      alt={userName}
                       fill
                       sizes="36px"
                       priority
@@ -117,22 +124,26 @@ export function TopNav() {
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              
-              <DropdownMenuContent 
-                align="end" 
-                className="w-56 mt-2 bg-card border border-secondary/10 shadow-lg rounded-md"
+
+              <DropdownMenuContent
+                align="end"
+                className="mt-2 w-56 rounded-md border border-secondary/10 bg-card shadow-lg"
               >
-                <DropdownMenuLabel className="font-normal p-3">
+                <DropdownMenuLabel className="p-3 font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-bold leading-none text-foreground truncate">{userName}</p>
-                    <p className="text-xs leading-none text-muted-foreground">Spotify Connected</p>
+                    <p className="truncate text-sm font-bold leading-none text-foreground">
+                      {userName}
+                    </p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      Spotify Connected
+                    </p>
                   </div>
                 </DropdownMenuLabel>
-                
+
                 <DropdownMenuSeparator className="bg-background" />
-                
+
                 <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="flex items-center gap-2 cursor-pointer py-2 rounded-sm mx-1 text-sm font-medium transition-colors focus:bg-accent/10 data-[state=open]:bg-accent/10">
+                  <DropdownMenuSubTrigger className="mx-1 flex cursor-pointer items-center gap-2 rounded-sm py-2 text-sm font-medium transition-colors focus:bg-accent/10 data-[state=open]:bg-accent/10">
                     {theme === "dark" || theme === "nerv-dark" ? (
                       <Moon className="h-4 w-4 text-indigo-500" />
                     ) : (
@@ -140,15 +151,16 @@ export function TopNav() {
                     )}
                     <span>Switch Theme</span>
                   </DropdownMenuSubTrigger>
-                  
-                  <DropdownMenuSubContent className="w-48 bg-card border border-secondary/10 shadow-md rounded-md p-1 mx-1">
+
+                  <DropdownMenuSubContent className="mx-1 w-48 rounded-md border border-secondary/10 bg-card p-1 shadow-md">
                     {availableThemes.map((t) => (
                       <DropdownMenuItem
                         key={t.id}
                         onClick={() => setTheme(t.id)}
                         className={cn(
-                          "flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-sm text-xs font-medium focus:bg-accent/10",
-                          theme === t.id && "bg-secondary/40 text-primary font-bold"
+                          "flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs font-medium focus:bg-accent/10",
+                          theme === t.id &&
+                            "bg-secondary/40 font-bold text-primary",
                         )}
                       >
                         <t.icon className={cn("h-3.5 w-3.5", t.color)} />
@@ -159,10 +171,10 @@ export function TopNav() {
                 </DropdownMenuSub>
 
                 <DropdownMenuSeparator className="bg-background" />
-                
-                <DropdownMenuItem 
+
+                <DropdownMenuItem
                   onClick={() => logout()}
-                  className="flex items-center gap-2 cursor-pointer py-2 text-destructive focus:text-destructive focus:bg-destructive/10 rounded-sm m-1 text-sm font-medium"
+                  className="m-1 flex cursor-pointer items-center gap-2 rounded-sm py-2 text-sm font-medium text-destructive focus:bg-destructive/10 focus:text-destructive"
                 >
                   <LogOut className="h-4 w-4" />
                   <span>Log Out</span>
@@ -170,17 +182,15 @@ export function TopNav() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            /* 💡 ВИПРАВЛЕНО: Кнопка тепер повністю повторює стиль, ховер, шрифти та відступи елементів навігації */
-            <button 
-              onClick={login} 
-              className="hidden md:flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-card hover:text-foreground transition-colors cursor-pointer"
+            <button
+              onClick={login}
+              className="hidden cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground md:flex"
             >
               <Music className="h-4 w-4" />
               <span>Connect Spotify</span>
             </button>
           )}
 
-          {/* Mobile Menu Trigger */}
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild className="md:hidden">
               <Button variant="ghost" size="icon" className="text-foreground">
@@ -190,7 +200,7 @@ export function TopNav() {
             </SheetTrigger>
             <SheetContent
               side="right"
-              className="w-64 border-0 bg-background p-0 shadow-lg flex flex-col justify-between"
+              className="flex w-64 flex-col justify-between border-0 bg-background p-0 shadow-lg"
             >
               <div>
                 <div className="flex h-16 items-center border-b-0 px-4">
@@ -231,14 +241,16 @@ export function TopNav() {
                 </nav>
               </div>
 
-              {/* Мобільний підвал */}
-              <div className="p-4 space-y-2 border-t border-secondary/10">
+              <div className="space-y-2 border-t border-secondary/10 p-4">
                 <Button
                   variant="outline"
-                  className="w-full justify-start gap-3 h-10 text-sm font-medium border-secondary/20"
+                  className="h-10 w-full justify-start gap-3 border-secondary/20 text-sm font-medium"
                   onClick={() => {
-                    const currentIndex = availableThemes.findIndex(t => t.id === theme);
-                    const nextIndex = (currentIndex + 1) % availableThemes.length;
+                    const currentIndex = availableThemes.findIndex(
+                      (t) => t.id === theme,
+                    );
+                    const nextIndex =
+                      (currentIndex + 1) % availableThemes.length;
                     setTheme(availableThemes[nextIndex]?.id ?? "dark");
                   }}
                 >
@@ -249,9 +261,9 @@ export function TopNav() {
                 {isLoggedIn ? (
                   <Button
                     variant="destructive"
-                    className="w-full gap-3 h-10 text-sm font-medium"
+                    className="h-10 w-full gap-3 text-sm font-medium"
                     onClick={() => {
-                      logout();
+                      void logout();
                       setOpen(false);
                     }}
                   >
@@ -261,9 +273,9 @@ export function TopNav() {
                 ) : (
                   <Button
                     variant="outline"
-                    className="w-full h-10 text-sm font-medium border-secondary/30 text-muted-foreground justify-start gap-3 px-3"
+                    className="h-10 w-full justify-start gap-3 border-secondary/30 px-3 text-sm font-medium text-muted-foreground"
                     onClick={() => {
-                      login();
+                      void login();
                       setOpen(false);
                     }}
                   >

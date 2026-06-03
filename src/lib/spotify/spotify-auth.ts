@@ -1,4 +1,8 @@
 import Cookies from "js-cookie";
+import type {
+  SpotifyTokenResponse,
+  SpotifyRefreshResponse,
+} from "~/types/auth";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID!;
 const REDIRECT_URI = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI!;
@@ -89,13 +93,11 @@ class SpotifyAuthService {
 
   async handleCallback(code: string) {
     const verifier = sessionStorage.getItem(STORAGE_KEY);
-
     if (!verifier) {
       throw new Error(
         "Missing PKCE code verifier. User must restart login flow.",
       );
     }
-
     const response = await fetch("/api/auth/spotify", {
       method: "POST",
       headers: {
@@ -107,15 +109,13 @@ class SpotifyAuthService {
         redirectUri: REDIRECT_URI,
       }),
     });
-
     const raw = await response.text();
-
     if (!response.ok) {
       console.error("[SpotifyAuth ERROR]:", raw);
       throw new Error(`Spotify auth failed: ${raw}`);
     }
 
-    const data = JSON.parse(raw);
+    const data = JSON.parse(raw) as SpotifyTokenResponse;
 
     sessionStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
     sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
@@ -123,7 +123,6 @@ class SpotifyAuthService {
       EXPIRES_AT_KEY,
       String(Date.now() + data.expires_in * 1000),
     );
-
     Cookies.set(COOKIE_ACCESS_TOKEN, data.access_token, { expires: 1 / 24 });
 
     await fetch("/api/auth/sync-user", {
@@ -135,9 +134,7 @@ class SpotifyAuthService {
         accessToken: data.access_token,
       }),
     });
-
     sessionStorage.removeItem(STORAGE_KEY);
-
     return data;
   }
 
@@ -162,20 +159,15 @@ class SpotifyAuthService {
 
   async refreshAccessToken(): Promise<string | null> {
     if (this.refreshPromise) {
-      console.log("♻️ Refresh in progress, waiting...");
       return this.refreshPromise;
     }
 
     this.refreshPromise = (async () => {
       try {
-        console.log("🚀 Starting new refresh token request...");
-        
         const currentRefreshToken = sessionStorage.getItem(REFRESH_TOKEN_KEY);
-
         if (!currentRefreshToken) {
           throw new Error("No refresh token available in storage");
         }
-
         const res = await fetch("/api/auth/spotify/refresh", {
           method: "POST",
           headers: {
@@ -188,7 +180,7 @@ class SpotifyAuthService {
 
         if (!res.ok) throw new Error("Refresh failed");
 
-        const data = await res.json();
+        const data = (await res.json()) as SpotifyRefreshResponse;
         const newToken = data.access_token;
 
         if (typeof window !== "undefined") {
@@ -196,14 +188,12 @@ class SpotifyAuthService {
           if (data.refresh_token) {
             sessionStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
           }
-          
           sessionStorage.setItem(
             EXPIRES_AT_KEY,
-            String(Date.now() + data.expires_in * 1000)
+            String(Date.now() + data.expires_in * 1000),
           );
           Cookies.set(COOKIE_ACCESS_TOKEN, newToken, { expires: 1 / 24 });
         }
-
         return newToken;
       } catch (error) {
         console.error("AUTH REFRESH ERROR:", error);
@@ -212,7 +202,6 @@ class SpotifyAuthService {
         this.refreshPromise = null;
       }
     })();
-
     return this.refreshPromise;
   }
 

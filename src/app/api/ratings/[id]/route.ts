@@ -1,5 +1,5 @@
-// src/app/api/ratings/[id]/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { eq, and } from "drizzle-orm";
 import { db } from "~/server/db";
@@ -7,7 +7,7 @@ import { ratings } from "~/server/db/schema";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> } 
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id: albumId } = await params;
@@ -16,7 +16,10 @@ export async function GET(
     const userId = cookieStore.get("spotify_user_id")?.value;
 
     if (!userId) {
-      return NextResponse.json({ rating: null, eloRating: 1000 }, { status: 401 });
+      return NextResponse.json(
+        { rating: null, eloRating: 1000 },
+        { status: 401 },
+      );
     }
 
     const userRating = await db
@@ -25,15 +28,14 @@ export async function GET(
       .where(
         and(
           eq(ratings.albumSpotifyId, albumId),
-          eq(ratings.userSpotifyId, userId)
-        )
+          eq(ratings.userSpotifyId, userId),
+        ),
       )
       .limit(1);
 
-    // Якщо запис існує, віддаємо його дані, якщо ні — дефолтні значення
-    return NextResponse.json({ 
+    return NextResponse.json({
       rating: userRating[0]?.rating ?? null,
-      eloRating: userRating[0]?.eloRating ?? 1000
+      eloRating: userRating[0]?.eloRating ?? 1000,
     });
   } catch (err) {
     console.error("Classic & Elo rating fetch error:", err);

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import type {
+  RefreshTokenRequestBody,
+  SpotifyRefreshResponse,
+} from "~/types/auth";
 
 export async function POST(req: Request) {
   try {
-    const { refresh_token } = await req.json();
+    const { refresh_token } = (await req.json()) as RefreshTokenRequestBody;
 
     if (!refresh_token) {
       return NextResponse.json(
@@ -25,9 +29,12 @@ export async function POST(req: Request) {
       body,
     });
 
-    const data = await res.json();
+    const data = (await res.json()) as unknown;
 
-    if (!res.ok || data.error) {
+    const hasError =
+      !res.ok || (data && typeof data === "object" && "error" in data);
+
+    if (hasError) {
       return NextResponse.json(
         {
           error: "Refresh token failed",
@@ -37,8 +44,8 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json(data);
-  } catch (e) {
+    return NextResponse.json(data as SpotifyRefreshResponse);
+  } catch {
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
