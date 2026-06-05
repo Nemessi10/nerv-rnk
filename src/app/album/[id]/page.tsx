@@ -12,13 +12,26 @@ import { Separator } from "~/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { formatDuration, formatAlbumDuration } from "~/lib/utils";
 
-import { ArrowLeft, Edit, Heart, Share2, Star, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Edit,
+  Heart,
+  Share2,
+  Star,
+  Loader2,
+  Plus,
+  X,
+  Smile,
+} from "lucide-react";
 import { RateAlbumModal } from "~/components/rate-album-modal";
 import type { AlbumDetails } from "~/types/album";
 
 interface DBRatingResponse {
   rating: number | null;
   eloRating: number;
+  customGenre: string | null;
+  customSubgenres: string[];
+  moods: string[];
 }
 
 export default function AlbumDetailPage({
@@ -36,6 +49,9 @@ export default function AlbumDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
 
+  const [newSubgenre, setNewSubgenre] = useState("");
+  const [newMood, setNewMood] = useState("");
+
   useEffect(() => {
     let isMounted = true;
 
@@ -43,10 +59,12 @@ export default function AlbumDetailPage({
       try {
         setLoading(true);
 
-        const detailsPromise = fetch(`/api/albums/${albumId}/details`).then((res) => {
-          if (!res.ok) throw new Error("API metadata failed");
-          return res.json() as Promise<AlbumDetails>;
-        });
+        const detailsPromise = fetch(`/api/albums/${albumId}/details`).then(
+          (res) => {
+            if (!res.ok) throw new Error("API metadata failed");
+            return res.json() as Promise<AlbumDetails>;
+          },
+        );
 
         const ratingPromise = fetch(`/api/ratings/${albumId}`)
           .then((res) =>
@@ -61,12 +79,19 @@ export default function AlbumDetailPage({
 
         if (isMounted) {
           if (!albumDetails) {
-            setError("Album not found in Spotify");
+            setError("Album not found");
             return;
           }
 
           setAlbum({
             ...albumDetails,
+            genre: ratingData?.customGenre ?? albumDetails.genre,
+            subgenres:
+              ratingData?.customSubgenres &&
+              ratingData.customSubgenres.length > 0
+                ? ratingData.customSubgenres
+                : albumDetails.subgenres,
+            moods: ratingData?.moods ?? [],
             rating: ratingData?.rating ?? undefined,
             eloRating: ratingData?.eloRating ?? 1000,
           });
@@ -84,6 +109,121 @@ export default function AlbumDetailPage({
       isMounted = false;
     };
   }, [albumId]);
+
+  const handleGenreOverride = async (selectedGenre: string) => {
+    if (!album) return;
+
+    const oldMainGenre = album.genre ?? "Unknown";
+    const currentSubgenres = album.subgenres ?? [];
+
+    const updatedSubgenres = [oldMainGenre, ...currentSubgenres].filter(
+      (g) => g !== selectedGenre,
+    );
+
+    try {
+      const res = await fetch(`/api/albums/${albumId}/override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customGenre: selectedGenre,
+          customSubgenres: updatedSubgenres,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Override failed");
+
+      setAlbum({
+        ...album,
+        genre: selectedGenre,
+        subgenres: updatedSubgenres,
+      });
+    } catch (err) {
+      console.error("Failed to override genre:", err);
+    }
+  };
+
+  const handleAddSubgenre = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubgenre.trim() || !album) return;
+
+    const cleanSubgenre = newSubgenre.trim();
+    const currentSubgenres = album.subgenres ?? [];
+
+    if (
+      album.genre?.toLowerCase() === cleanSubgenre ||
+      currentSubgenres.some((g) => g.toLowerCase() === cleanSubgenre)
+    ) {
+      setNewSubgenre("");
+      return;
+    }
+
+    const updatedSubgenres = [...currentSubgenres, newSubgenre.trim()];
+
+    try {
+      const res = await fetch(`/api/albums/${albumId}/override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customSubgenres: updatedSubgenres,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to add subgenre");
+
+      // Оновлюємо стейт, і новий піджанр миттєво з'явиться на екрані як клікабельний бадж
+      setAlbum({
+        ...album,
+        subgenres: updatedSubgenres,
+      });
+      setNewSubgenre("");
+    } catch (err) {
+      console.error("Failed to add subgenre:", err);
+    }
+  };
+
+  const handleAddMood = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMood.trim() || !album) return;
+
+    const cleanMood = newMood.trim();
+    if (album.moods?.includes(cleanMood)) return;
+
+    const updatedMoods = [...(album.moods ?? []), cleanMood];
+
+    try {
+      const res = await fetch(`/api/albums/${albumId}/override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moods: updatedMoods }),
+      });
+
+      if (!res.ok) throw new Error("Mood save failed");
+
+      setAlbum({ ...album, moods: updatedMoods });
+      setNewMood("");
+    } catch (err) {
+      console.error("Failed to add mood:", err);
+    }
+  };
+
+  const handleRemoveMood = async (moodToRemove: string) => {
+    if (!album) return;
+    const updatedMoods = (album.moods ?? []).filter((m) => m !== moodToRemove);
+
+    try {
+      const res = await fetch(`/api/albums/${albumId}/override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moods: updatedMoods }),
+      });
+
+      if (!res.ok) throw new Error("Mood delete failed");
+
+      setAlbum({ ...album, moods: updatedMoods });
+    } catch (err) {
+      console.error("Failed to remove mood:", err);
+    }
+  };
 
   const totalDurationMs = useMemo(() => {
     if (!album?.tracks) return 0;
@@ -164,16 +304,81 @@ export default function AlbumDetailPage({
               <span>•</span>
               <p>{album.year ? album.year.slice(0, 4) : "—"}</p>
             </div>
+
             {album.genre && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Badge className="capitalize">{album.genre}</Badge>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Badge className="bg-primary px-3 py-1 text-sm capitalize shadow-sm hover:bg-primary">
+                  {album.genre}
+                </Badge>
                 {album.subgenres?.map((s) => (
-                  <Badge key={s} variant="outline" className="capitalize">
+                  <Badge
+                    key={s}
+                    variant="outline"
+                    className="cursor-pointer capitalize transition-colors hover:bg-secondary hover:text-secondary-foreground"
+                    title="Click to make this the main genre"
+                    onClick={() => handleGenreOverride(s)}
+                  >
                     {s}
                   </Badge>
                 ))}
+                <form
+                  onSubmit={handleAddSubgenre}
+                  className="ml-1 inline-flex items-center"
+                >
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      placeholder="Add subgenre"
+                      value={newSubgenre}
+                      onChange={(e) => setNewSubgenre(e.target.value)}
+                      className="w-32 rounded-md border border-dashed border-muted-foreground/40 bg-transparent py-0.5 pl-2.5 pr-7 text-xs transition-all placeholder:text-muted-foreground/70 focus:w-40 focus:border-solid focus:border-primary focus:outline-none"
+                    />
+                    <Plus className="pointer-events-none absolute right-2 h-3 w-3 text-muted-foreground/60" />
+                  </div>
+                </form>
               </div>
             )}
+
+            <div className="mt-6 space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <Smile className="h-3.5 w-3.5" />
+                <span>Moods</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {album.moods?.map((mood) => (
+                  <Badge
+                    key={mood}
+                    variant="secondary"
+                    className="gap-1 rounded-md py-1 pl-2.5 pr-1.5 text-xs font-medium shadow-sm"
+                  >
+                    <span>{mood}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMood(mood)}
+                      className="rounded-full p-0.5 transition-colors hover:bg-muted-foreground/20"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+
+                <form
+                  onSubmit={handleAddMood}
+                  className="inline-flex items-center"
+                >
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      placeholder="Add mood"
+                      value={newMood}
+                      onChange={(e) => setNewMood(e.target.value)}
+                      className="w-24 rounded-md border border-dashed border-muted-foreground/40 bg-transparent px-2.5 py-1 text-xs transition-all placeholder:text-muted-foreground/70 focus:w-36 focus:border-solid focus:border-primary focus:outline-none"
+                    />
+                    <Plus className="pointer-events-none absolute right-2 h-3 w-3 text-muted-foreground/60" />
+                  </div>
+                </form>
+              </div>
+            </div>
           </div>
 
           <Tabs defaultValue="tracks">

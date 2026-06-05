@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { eq, and } from "drizzle-orm";
 import { db } from "~/server/db";
-import { albums, ratings } from "~/server/db/schema";
+import { albums, ratings, albumCustomMetadata } from "~/server/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +21,16 @@ export async function GET() {
         title: albums.title,
         artist: albums.artist,
         cover: albums.image,
-        genre: albums.genre,
-        subgenres: albums.subgenres,
+        systemGenre: albums.genre,
+        systemSubgenres: albums.subgenres,
         year: albums.releaseDate,
         spotifyAddedAt: albums.spotifyAddedAt,
         lastPlayedAt: albums.lastPlayedAt,
         rating: ratings.rating,
         eloRating: ratings.eloRating,
+        customGenre: albumCustomMetadata.customGenre,
+        customSubgenres: albumCustomMetadata.customSubgenres,
+        moods: albumCustomMetadata.moods,
       })
       .from(albums)
       .leftJoin(
@@ -36,9 +39,40 @@ export async function GET() {
           eq(ratings.albumSpotifyId, albums.spotifyId),
           eq(ratings.userSpotifyId, userId),
         ),
+      )
+      .leftJoin(
+        albumCustomMetadata,
+        and(
+          eq(albumCustomMetadata.albumSpotifyId, albums.spotifyId),
+          eq(albumCustomMetadata.userSpotifyId, userId),
+        ),
       );
 
-    return NextResponse.json(userLibrary);
+    const formattedAlbums = userLibrary.map((row) => {
+      return {
+        id: row.id,
+        title: row.title,
+        artist: row.artist,
+        cover: row.cover,
+        year: row.year,
+        spotifyAddedAt: row.spotifyAddedAt
+          ? new Date(row.spotifyAddedAt).toISOString()
+          : null,
+        lastPlayedAt: row.lastPlayedAt
+          ? new Date(row.lastPlayedAt).toISOString()
+          : null,
+        rating: row.rating ?? undefined,
+        eloRating: row.eloRating ?? 1000,
+        genre: row.customGenre ?? row.systemGenre ?? "Unknown",
+        subgenres:
+          row.customSubgenres && row.customSubgenres.length > 0
+            ? row.customSubgenres
+            : (row.systemSubgenres ?? []),
+        moods: row.moods ?? [],
+      };
+    });
+
+    return NextResponse.json(formattedAlbums);
   } catch (err) {
     console.error("Fetch user library error:", err);
     return NextResponse.json(

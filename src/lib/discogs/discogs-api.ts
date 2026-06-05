@@ -22,11 +22,15 @@ class DiscogsApiService {
   ): Promise<{ genre: string; subgenres: string[] }> {
     const currentRetry = retryCount ?? 0;
 
+    const cleanTitle = albumTitle
+      .replace(/\s*[\(\[][^)]*(remaster|deluxe|expanded|edition|version|anniversary|live|bonus)[^)]*[\)\]]/gi, "")
+      .trim();
+
     try {
       const query = new URLSearchParams({
         type: "release",
         artist: artist,
-        release_title: albumTitle,
+        release_title: cleanTitle,
         per_page: "1",
       });
 
@@ -67,8 +71,9 @@ class DiscogsApiService {
       const data = (await res.json()) as DiscogsSearchResult;
       const firstResult = data.results?.[0];
 
-      const genre = firstResult?.genre?.join(" / ") ?? "Unknown";
-      const subgenres = firstResult?.style ?? [];
+      const styles = firstResult?.style ?? [];
+      const genre = styles[0] ?? firstResult?.genre?.[0] ?? "Unknown";
+      const subgenres = styles.slice(1);
 
       return { genre, subgenres };
     } catch (error) {

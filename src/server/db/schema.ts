@@ -1,6 +1,7 @@
 // Example model schema from the Drizzle docs
 // https://orm.drizzle.team/docs/sql-schema-declaration
 
+import { sql } from "drizzle-orm";
 import { pgTableCreator, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const createTable = pgTableCreator((name) => `nerv-rnk_${name}`);
@@ -69,3 +70,40 @@ export const eloMatches = createTable("elo_match", (d) => ({
   eloDelta: d.real("elo_delta").notNull(),
   createdAt: d.timestamp("created_at").defaultNow().notNull(),
 }));
+
+export const albumCustomMetadata = createTable(
+  "album_custom_metadata",
+  (d) => ({
+    id: d.text("id").primaryKey(),
+    userSpotifyId: d
+      .text("user_id")
+      .notNull()
+      .references(() => users.spotifyId, { onDelete: "cascade" }),
+    albumSpotifyId: d
+      .text("album_id")
+      .notNull()
+      .references(() => albums.spotifyId, { onDelete: "cascade" }),
+
+    customGenre: d.text("custom_genre"),
+    customSubgenres: d
+      .text("custom_subgenres")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+
+    moods: d
+      .text("moods")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+
+    createdAt: d.timestamp("created_at").defaultNow().notNull(),
+    updatedAt: d.timestamp("updated_at").defaultNow().notNull(),
+  }),
+  (table) => ({
+    userAlbumMetaUnique: uniqueIndex("user_album_meta_unique").on(
+      table.userSpotifyId,
+      table.albumSpotifyId,
+    ),
+  }),
+);

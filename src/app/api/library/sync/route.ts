@@ -15,9 +15,21 @@ export const dynamic = "force-dynamic";
 
 const SYNC_COOLDOWN = 1000 * 60 * 5; // 5 minutes
 
+let isSyncingInProgress = false;
+
 export async function POST() {
   try {
     const cookieStore = await cookies();
+
+    if (isSyncingInProgress) {
+      console.log(
+        "[Sync API] Rejecting parallel request: Sync is already running.",
+      );
+      return NextResponse.json({
+        success: true,
+        message: "Sync already in progress",
+      });
+    }
 
     const lastSync = cookieStore.get("last_library_sync")?.value;
     if (lastSync && Date.now() - Number(lastSync) < SYNC_COOLDOWN) {
@@ -73,82 +85,93 @@ export async function POST() {
     });
 
     if (allSpotifyAlbums.length > 0) {
+      isSyncingInProgress = true;
+
       void (async () => {
-        console.log(
-          `[Sync Worker] Starting background genre sync for ${allSpotifyAlbums.length} albums...`,
-        );
+        try {
+          console.log(
+            `[Sync Worker] Starting background genre sync for ${allSpotifyAlbums.length} albums...`,
+          );
 
-        const existingDbAlbums = await db
-          .select({ spotifyId: albums.spotifyId })
-          .from(albums);
-        const existingIdsSet = new Set(
-          existingDbAlbums.map((a) => a.spotifyId),
-        );
+          const existingDbAlbums = await db
+            .select({ spotifyId: albums.spotifyId })
+            .from(albums);
+          const existingIdsSet = new Set(
+            existingDbAlbums.map((a) => a.spotifyId),
+          );
 
-        const albumsToInsert = [];
-        let discogsRequestCounter = 0;
+          const albumsToInsert = [];
+          let discogsRequestCounter = 0;
 
-        for (const item of allSpotifyAlbums) {
-          const albumId = item.album.id;
-          const artistName = item.album.artists[0]?.name ?? "Unknown Artist";
-          const albumTitle = item.album.name;
+          for (const item of allSpotifyAlbums) {
+            const albumId = item.album.id;
+            const artistName = item.album.artists[0]?.name ?? "Unknown Artist";
+            const albumTitle = item.album.name;
 
-          let genre = "Unknown";
-          let subgenres: string[] = [];
+            let genre = "Unknown";
+            let subgenres: string[] = [];
 
-          if (existingIdsSet.has(albumId)) {
-          } else {
-            const discogsData = await discogsApi.getAlbumGenres(
-              artistName,
-              albumTitle,
-            );
-            genre = discogsData.genre;
-            subgenres = discogsData.subgenres;
-
-            discogsRequestCounter++;
-
-            if (discogsRequestCounter % 5 === 0) {
-              console.log(
-                `[Sync Worker] Processed ${discogsRequestCounter} new albums. Cooling down Discogs...`,
-              );
-              await new Promise((resolve) => setTimeout(resolve, 3500));
+            if (existingIdsSet.has(albumId)) {
             } else {
-              await new Promise((resolve) => setTimeout(resolve, 1500));
+              const discogsData = await discogsApi.getAlbumGenres(
+                artistName,
+                albumTitle,
+              );
+              genre = discogsData.genre;
+              subgenres = discogsData.subgenres;
+
+              discogsRequestCounter++;
+
+              if (discogsRequestCounter % 5 === 0) {
+                console.log(
+                  `[Sync Worker] Processed ${discogsRequestCounter} new albums. Cooling down Discogs...`,
+                );
+                await new Promise((resolve) => setTimeout(resolve, 3500));
+              } else {
+                await new Promise((resolve) => setTimeout(resolve, 1500));
+              }
             }
+
+            albumsToInsert.push({
+              spotifyId: albumId,
+              title: albumTitle,
+              artist: artistName,
+              artistSpotifyId: item.album.artists[0]?.id ?? null,
+              image: item.album.images[0]?.url ?? null,
+              genre: genre,
+              subgenres: subgenres,
+              releaseDate: item.album.release_date,
+              spotifyAddedAt: new Date(item.added_at),
+              lastPlayedAt: playbackMap.get(albumId) ?? null,
+            });
           }
 
-          albumsToInsert.push({
-            spotifyId: albumId,
-            title: albumTitle,
-            artist: artistName,
-            artistSpotifyId: item.album.artists[0]?.id ?? null,
-            image: item.album.images[0]?.url ?? null,
-            genre: genre,
-            subgenres: subgenres,
-            releaseDate: item.album.release_date,
-            spotifyAddedAt: new Date(item.added_at),
-            lastPlayedAt: playbackMap.get(albumId) ?? null,
-          });
-        }
+          if (albumsToInsert.length > 0) {
+            await db
+              .insert(albums)
+              .values(albumsToInsert)
+              .onConflictDoUpdate({
+                target: albums.spotifyId,
+                set: {
+                  genre: sql`CASE WHEN excluded.genre <> 'Unknown' THEN excluded.genre ELSE ${albums.genre} END`,
+                  subgenres: sql`CASE WHEN array_length(excluded.subgenres, 1) > 0 THEN excluded.subgenres ELSE ${albums.subgenres} END`,
+                  spotifyAddedAt: sql`excluded.spotify_added_at`,
+                  lastPlayedAt: sql`COALESCE(excluded.last_played_at, ${albums.lastPlayedAt})`,
+                },
+              });
+          }
 
-        if (albumsToInsert.length > 0) {
-          await db
-            .insert(albums)
-            .values(albumsToInsert)
-            .onConflictDoUpdate({
-              target: albums.spotifyId,
-              set: {
-                genre: sql`CASE WHEN excluded.genre <> 'Unknown' THEN excluded.genre ELSE ${albums.genre} END`,
-                subgenres: sql`CASE WHEN array_length(excluded.subgenres, 1) > 0 THEN excluded.subgenres ELSE ${albums.subgenres} END`,
-                spotifyAddedAt: sql`excluded.spotify_added_at`,
-                lastPlayedAt: sql`COALESCE(excluded.last_played_at, ${albums.lastPlayedAt})`,
-              },
-            });
+          console.log(
+            `[Sync Worker] Background sync finished. Total Discogs requests made: ${discogsRequestCounter}`,
+          );
+        } catch (workerError) {
+          console.error(
+            "[Sync Worker] Error inside background thread:",
+            workerError,
+          );
+        } finally {
+          isSyncingInProgress = false;
         }
-
-        console.log(
-          `[Sync Worker] Background sync finished. Total Discogs requests made: ${discogsRequestCounter}`,
-        );
       })();
     }
 
