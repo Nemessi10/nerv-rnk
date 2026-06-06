@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, Suspense } from "react"; 
 import { useRouter, useSearchParams } from "next/navigation";
 import { spotifyAuth } from "~/lib/spotify/spotify-auth";
 import { useAuthStore } from "~/stores/auth-store";
 import { spotifyApi } from "~/lib/spotify/spotify-api";
 
-export default function CallbackPage() {
+function CallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const init = useAuthStore((s) => s.init);
@@ -38,5 +38,19 @@ export default function CallbackPage() {
     <div className="flex min-h-screen items-center justify-center">
       Connecting Spotify...
     </div>
+  );
+}
+
+export default function CallbackPage() {
+  return (
+    <Suspense 
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          Loading authentication...
+        </div>
+      }
+    >
+      <CallbackContent />
+    </Suspense>
   );
 }

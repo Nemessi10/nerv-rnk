@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -39,23 +39,15 @@ const COLORS = [
   "#14b8a6",
 ];
 const ALL_MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
 export default function AnalyticsPage() {
   const { albums, loading } = useSpotifyLibrary();
   const { matches: eloMatches } = useEloMatches();
+
+  const [activeTab, setActiveTab] = useState<string>("overview");
 
   const last6Months = useMemo(() => {
     const result = [];
@@ -89,9 +81,7 @@ export default function AnalyticsPage() {
       }
     });
 
-    const sortedGenres = Object.entries(genreCounts).sort(
-      (a, b) => b[1] - a[1],
-    );
+    const sortedGenres = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]);
     const topGenre = sortedGenres[0]?.[0] ?? "None";
     const topGenrePercent =
       total > 0 && sortedGenres[0]
@@ -127,16 +117,8 @@ export default function AnalyticsPage() {
 
   const ratingDistribution = useMemo(() => {
     const distribution: Record<string, number> = {
-      "10": 0,
-      "9": 0,
-      "8": 0,
-      "7": 0,
-      "6": 0,
-      "5": 0,
-      "4": 0,
-      "3": 0,
-      "2": 0,
-      "1": 0,
+      "10": 0, "9": 0, "8": 0, "7": 0, "6": 0,
+      "5": 0, "4": 0, "3": 0, "2": 0, "1": 0,
     };
     albums.forEach((a) => {
       if (typeof a.rating === "number") {
@@ -168,9 +150,10 @@ export default function AnalyticsPage() {
     const groups: Record<string, { sum: number; count: number }> = {};
     albums.forEach((a) => {
       if (typeof a.rating === "number" && a.genre && a.genre !== "Unknown") {
-        groups[a.genre] ??= { sum: 0, count: 0 };
-        groups[a.genre]!.sum += a.rating;
-        groups[a.genre]!.count += 1;
+        // 💡 Оптимізовано через ??= для задоволення суворого TypeScript та лінтера
+        const group = (groups[a.genre] ??= { sum: 0, count: 0 });
+        group.sum += a.rating;
+        group.count += 1;
       }
     });
     return Object.entries(groups)
@@ -192,9 +175,7 @@ export default function AnalyticsPage() {
     const k2 = g2.toLowerCase().replace(/\s+/g, "");
     const k3 = g3.toLowerCase().replace(/\s+/g, "");
 
-    let c1 = 0,
-      c2 = 0,
-      c3 = 0;
+    let c1 = 0, c2 = 0, c3 = 0;
 
     if (last6Months[0]) {
       const windowStartLimit = new Date(
@@ -287,9 +268,9 @@ export default function AnalyticsPage() {
     const groups: Record<string, { sum: number; count: number }> = {};
     albums.forEach((a) => {
       if (typeof a.rating === "number") {
-        groups[a.artist] ??= { sum: 0, count: 0 };
-        groups[a.artist]!.sum += a.rating;
-        groups[a.artist]!.count += 1;
+        const group = (groups[a.artist] ??= { sum: 0, count: 0 });
+        group.sum += a.rating;
+        group.count += 1;
       }
     });
     return Object.entries(groups)
@@ -360,486 +341,500 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="overview" className="mt-8">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
         <TabsList className="grid w-full grid-cols-4 md:w-auto">
-          <TabsTrigger value="overview" className="gap-2">
+          <TabsTrigger value="overview" id="analytics-trigger-overview" className="gap-2">
             <BarChart className="h-4 w-4" />{" "}
             <span className="hidden sm:inline-block">Overview</span>
           </TabsTrigger>
-          <TabsTrigger value="genres" className="gap-2">
+          <TabsTrigger value="genres" id="analytics-trigger-genres" className="gap-2">
             <PieChart className="h-4 w-4" />{" "}
             <span className="hidden sm:inline-block">Genres</span>
           </TabsTrigger>
-          <TabsTrigger value="elo" className="gap-2">
+          <TabsTrigger value="elo" id="analytics-trigger-elo" className="gap-2">
             <Swords className="h-4 w-4" />{" "}
             <span className="hidden sm:inline-block">Elo Battles</span>
           </TabsTrigger>
-          <TabsTrigger value="artists" className="gap-2">
+          <TabsTrigger value="artists" id="analytics-trigger-artists" className="gap-2">
             <BarChart className="h-4 w-4" />{" "}
             <span className="hidden sm:inline-block">Artists</span>
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Rated Albums</CardTitle>
-              <CardDescription>Your highest rated albums</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {topAlbums.map((album, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between rounded-md p-2 hover:bg-secondary/50"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="w-6 text-center">
-                        {index + 1}
-                      </Badge>
-                      <div>
-                        <p className="font-medium">{album.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {album.artist}
-                        </p>
+          {activeTab === "overview" && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top Rated Albums</CardTitle>
+                  <CardDescription>Your highest rated albums</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {topAlbums.map((album, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between rounded-md p-2 hover:bg-secondary/50"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="w-6 text-center">
+                            {index + 1}
+                          </Badge>
+                          <div>
+                            <p className="font-medium">{album.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {album.artist}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary">{album.rating}</Badge>
                       </div>
-                    </div>
-                    <Badge variant="secondary">{album.rating}</Badge>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Rating Distribution</CardTitle>
-              <CardDescription>How you rate across the scale</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart
-                    data={ratingDistribution}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.1)"
-                    />
-                    <XAxis
-                      dataKey="rating"
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      allowDecimals={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        color: "hsl(var(--foreground))",
-                      }}
-                    />
-                    <Bar
-                      dataKey="count"
-                      fill="hsl(var(--primary))"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Rating Distribution</CardTitle>
+                  <CardDescription>How you rate across the scale</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart
+                        data={ratingDistribution}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.1)"
+                        />
+                        <XAxis
+                          dataKey="rating"
+                          stroke="hsl(var(--muted-foreground))"
+                        />
+                        <YAxis
+                          stroke="hsl(var(--muted-foreground))"
+                          allowDecimals={false}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                            color: "hsl(var(--foreground))",
+                          }}
+                        />
+                        <Bar
+                          dataKey="count"
+                          fill="hsl(var(--primary))"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="genres" className="mt-6 space-y-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Genre Distribution</CardTitle>
-                <CardDescription>
-                  Breakdown of your music by genre
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsPieChart>
-                      <Pie
-                        data={genreDistributionData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) =>
-                          `${name} ${(percent * 100).toFixed(0)}%`
-                        }
+          {activeTab === "genres" && (
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Genre Distribution</CardTitle>
+                  <CardDescription>
+                    Breakdown of your music by genre
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPieChart>
+                        <Pie
+                          data={genreDistributionData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, percent }) =>
+                            `${name} ${(percent * 100).toFixed(0)}%`
+                          }
+                        >
+                          {genreDistributionData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                            color: "hsl(var(--foreground))",
+                          }}
+                        />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Genre Ratings</CardTitle>
+                  <CardDescription>Average ratings by category</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart
+                        data={genreRatingsData}
+                        layout="vertical"
+                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                       >
-                        {genreDistributionData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.1)"
+                        />
+                        <XAxis
+                          type="number"
+                          domain={[0, 10]}
+                          stroke="hsl(var(--muted-foreground))"
+                        />
+                        <YAxis
+                          dataKey="genre"
+                          type="category"
+                          stroke="hsl(var(--muted-foreground))"
+                          width={95}
+                          fontSize={12}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                            color: "hsl(var(--foreground))",
+                          }}
+                        />
+                        <Bar
+                          dataKey="rating"
+                          fill="hsl(var(--primary))"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle>Genre Evolution</CardTitle>
+                  <CardDescription>
+                    Cumulative growth of your top genres over the last 6 months
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsLineChart
+                        data={genreEvolutionData}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.1)"
+                        />
+                        <XAxis
+                          dataKey="month"
+                          stroke="hsl(var(--muted-foreground))"
+                        />
+                        <YAxis stroke="hsl(var(--muted-foreground))" />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                            color: "hsl(var(--foreground))",
+                          }}
+                        />
+                        <Legend />
+                        {genreEvolutionData[0]?.g1Name && (
+                          <Line
+                            type="monotone"
+                            name={genreEvolutionData[0].g1Name}
+                            dataKey={genreEvolutionData[0].g1Name
+                              .toLowerCase()
+                              .replace(/\s+/g, "")}
+                            stroke="#8b5cf6"
+                            strokeWidth={2}
+                            activeDot={{ r: 8 }}
                           />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          borderColor: "hsl(var(--border))",
-                          color: "hsl(var(--foreground))",
-                        }}
-                      />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Genre Ratings</CardTitle>
-                <CardDescription>Average ratings by category</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsBarChart
-                      data={genreRatingsData}
-                      layout="vertical"
-                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="rgba(255,255,255,0.1)"
-                      />
-                      <XAxis
-                        type="number"
-                        domain={[0, 10]}
-                        stroke="hsl(var(--muted-foreground))"
-                      />
-                      <YAxis
-                        dataKey="genre"
-                        type="category"
-                        stroke="hsl(var(--muted-foreground))"
-                        width={95}
-                        fontSize={12}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          borderColor: "hsl(var(--border))",
-                          color: "hsl(var(--foreground))",
-                        }}
-                      />
-                      <Bar
-                        dataKey="rating"
-                        fill="hsl(var(--primary))"
-                        radius={[0, 4, 4, 0]}
-                      />
-                    </RechartsBarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Genre Evolution</CardTitle>
-              <CardDescription>
-                Cumulative growth of your top genres over the last 6 months
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsLineChart
-                    data={genreEvolutionData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.1)"
-                    />
-                    <XAxis
-                      dataKey="month"
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <YAxis stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        color: "hsl(var(--foreground))",
-                      }}
-                    />
-                    <Legend />
-                    {genreEvolutionData[0]?.g1Name && (
-                      <Line
-                        type="monotone"
-                        name={genreEvolutionData[0].g1Name}
-                        dataKey={genreEvolutionData[0].g1Name
-                          .toLowerCase()
-                          .replace(/\s+/g, "")}
-                        stroke="#8b5cf6"
-                        strokeWidth={2}
-                        activeDot={{ r: 8 }}
-                      />
-                    )}
-                    {genreEvolutionData[0]?.g2Name && (
-                      <Line
-                        type="monotone"
-                        name={genreEvolutionData[0].g2Name}
-                        dataKey={genreEvolutionData[0].g2Name
-                          .toLowerCase()
-                          .replace(/\s+/g, "")}
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                      />
-                    )}
-                    {genreEvolutionData[0]?.g3Name && (
-                      <Line
-                        type="monotone"
-                        name={genreEvolutionData[0].g3Name}
-                        dataKey={genreEvolutionData[0].g3Name
-                          .toLowerCase()
-                          .replace(/\s+/g, "")}
-                        stroke="#14b8a6"
-                        strokeWidth={2}
-                      />
-                    )}
-                  </RechartsLineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+                        )}
+                        {genreEvolutionData[0]?.g2Name && (
+                          <Line
+                            type="monotone"
+                            name={genreEvolutionData[0].g2Name}
+                            dataKey={genreEvolutionData[0].g2Name
+                              .toLowerCase()
+                              .replace(/\s+/g, "")}
+                            stroke="#3b82f6"
+                            strokeWidth={2}
+                          />
+                        )}
+                        {genreEvolutionData[0]?.g3Name && (
+                          <Line
+                            type="monotone"
+                            name={genreEvolutionData[0].g3Name}
+                            dataKey={genreEvolutionData[0].g3Name
+                              .toLowerCase()
+                              .replace(/\s+/g, "")}
+                            stroke="#14b8a6"
+                            strokeWidth={2}
+                          />
+                        )}
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="elo" className="mt-6 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Elo League Tiers</CardTitle>
-              <CardDescription>
-                Distribution of your rated albums into skill divisions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart
-                    data={eloLeaguesData}
-                    layout="vertical"
-                    margin={{ top: 10, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.05)"
-                    />
-                    <XAxis
-                      type="number"
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <YAxis
-                      dataKey="league"
-                      type="category"
-                      stroke="hsl(var(--muted-foreground))"
-                      width={140}
-                      fontSize={12}
-                      fontWeight="bold"
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                      }}
-                    />
-                    <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]}>
-                      {eloLeaguesData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
+          {activeTab === "elo" && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Elo League Tiers</CardTitle>
+                  <CardDescription>
+                    Distribution of your rated albums into skill divisions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart
+                        data={eloLeaguesData}
+                        layout="vertical"
+                        margin={{ top: 10, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.05)"
                         />
-                      ))}
-                    </Bar>
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+                        <XAxis
+                          type="number"
+                          stroke="hsl(var(--muted-foreground))"
+                        />
+                        <YAxis
+                          dataKey="league"
+                          type="category"
+                          stroke="hsl(var(--muted-foreground))"
+                          width={140}
+                          fontSize={12}
+                          fontWeight="bold"
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                          }}
+                        />
+                        <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]}>
+                          {eloLeaguesData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Bar>
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Battle Activity</CardTitle>
-              <CardDescription>
-                Number of Elo matchups played per month
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart
-                    data={battleActivityData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.1)"
-                    />
-                    <XAxis
-                      dataKey="month"
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      allowDecimals={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                      }}
-                    />
-                    <Bar
-                      name="Matches Played"
-                      dataKey="matches"
-                      fill="hsl(var(--primary))"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Battle Activity</CardTitle>
+                  <CardDescription>
+                    Number of Elo matchups played per month
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart
+                        data={battleActivityData}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.1)"
+                        />
+                        <XAxis
+                          dataKey="month"
+                          stroke="hsl(var(--muted-foreground))"
+                        />
+                        <YAxis
+                          stroke="hsl(var(--muted-foreground))"
+                          allowDecimals={false}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                          }}
+                        />
+                        <Bar
+                          name="Matches Played"
+                          dataKey="matches"
+                          fill="hsl(var(--primary))"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="artists" className="mt-6 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Artists</CardTitle>
-              <CardDescription>
-                Artists with the highest average ratings
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {topArtists.map((artist, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between rounded-md p-2 hover:bg-secondary/50"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="w-6 text-center">
-                        {index + 1}
-                      </Badge>
-                      <div>
-                        <p className="font-medium">{artist.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {artist.albumCount} album(s)
-                        </p>
+          {activeTab === "artists" && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top Artists</CardTitle>
+                  <CardDescription>
+                    Artists with the highest average ratings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {topArtists.map((artist, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between rounded-md p-2 hover:bg-secondary/50"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="w-6 text-center">
+                            {index + 1}
+                          </Badge>
+                          <div>
+                            <p className="font-medium">{artist.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {artist.albumCount} album(s)
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary">{artist.avgRating}</Badge>
                       </div>
-                    </div>
-                    <Badge variant="secondary">{artist.avgRating}</Badge>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Artist Ratings</CardTitle>
-              <CardDescription>Average ratings by artist</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart
-                    data={topArtists}
-                    layout="vertical"
-                    margin={{ top: 20, right: 30, left: 80, bottom: 5 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.1)"
-                    />
-                    <XAxis
-                      type="number"
-                      domain={[0, 10]}
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      stroke="hsl(var(--muted-foreground))"
-                      width={80}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        color: "hsl(var(--foreground))",
-                      }}
-                    />
-                    <Bar
-                      dataKey="avgRating"
-                      fill="hsl(var(--primary))"
-                      radius={[0, 4, 4, 0]}
-                    />
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Artist Diversity</CardTitle>
-              <CardDescription>
-                Number of albums rated by artist
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsPieChart>
-                    <Pie
-                      data={topArtists.map((artist) => ({
-                        name: artist.name,
-                        value: artist.albumCount,
-                      }))}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) =>
-                        `${name} ${(percent * 100).toFixed(0)}%`
-                      }
-                    >
-                      {topArtists.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Artist Ratings</CardTitle>
+                  <CardDescription>Average ratings by artist</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart
+                        data={topArtists}
+                        layout="vertical"
+                        margin={{ top: 20, right: 30, left: 80, bottom: 5 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="rgba(255,255,255,0.1)"
                         />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        borderColor: "hsl(var(--border))",
-                        color: "hsl(var(--foreground))",
-                      }}
-                    />
-                  </RechartsPieChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+                        <XAxis
+                          type="number"
+                          domain={[0, 10]}
+                          stroke="hsl(var(--muted-foreground))"
+                        />
+                        <YAxis
+                          dataKey="name"
+                          type="category"
+                          stroke="hsl(var(--muted-foreground))"
+                          width={80}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                            color: "hsl(var(--foreground))",
+                          }}
+                        />
+                        <Bar
+                          dataKey="avgRating"
+                          fill="hsl(var(--primary))"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Artist Diversity</CardTitle>
+                  <CardDescription>
+                    Number of albums rated by artist
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPieChart>
+                        <Pie
+                          data={topArtists.map((artist) => ({
+                            name: artist.name,
+                            value: artist.albumCount,
+                          }))}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, percent }) =>
+                            `${name} ${(percent * 100).toFixed(0)}%`
+                          }
+                        >
+                          {topArtists.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                            color: "hsl(var(--foreground))",
+                          }}
+                        />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>

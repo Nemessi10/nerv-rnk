@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -42,6 +42,8 @@ import {
 import { useSpotifyLibrary } from "~/hooks/use-spotify-library";
 import type { AppAlbum } from "~/types/album";
 
+const ITEMS_PER_PAGE = 24;
+
 export default function LibraryPage() {
   const { albums, loading } = useSpotifyLibrary();
   const router = useRouter();
@@ -55,6 +57,9 @@ export default function LibraryPage() {
   const [selectedSubgenre, setSelectedSubgenre] = useState<string | null>(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [minRating, setMinRating] = useState<number | null>(null);
+
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const [sortBy, setSortBy] = useState<
     "title" | "artist" | "year" | "elo" | "classic" | "added" | "played"
@@ -83,6 +88,10 @@ export default function LibraryPage() {
     }
   }, [sortBy]);
 
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [searchQuery, selectedGenre, selectedSubgenre, selectedMood, minRating, sortBy, activeTab]);
+
   const handleResetFilters = () => {
     setSearchQuery("");
     setSelectedGenre(null);
@@ -101,28 +110,28 @@ export default function LibraryPage() {
     );
   }, [searchQuery, selectedGenre, selectedSubgenre, selectedMood, minRating]);
 
-  const genres = useMemo(() => {
-    return [
-      ...new Set(albums.map((a) => a.genre).filter((g): g is string => !!g)),
-    ];
-  }, [albums]);
+  const { genres, subgenres, moods } = useMemo(() => {
+    const genresSet = new Set<string>();
+    const subgenresSet = new Set<string>();
+    const moodsSet = new Set<string>();
 
-  const subgenres = useMemo(() => {
-    return [
-      ...new Set(
-        albums
-          .flatMap((a) => a.subgenres ?? [])
-          .filter((s): s is string => !!s),
-      ),
-    ];
-  }, [albums]);
+    albums.forEach((album) => {
+      if (album.genre) genresSet.add(album.genre);
+      
+      album.subgenres?.forEach((sub) => {
+        if (sub) subgenresSet.add(sub);
+      });
+      
+      album.moods?.forEach((mood) => {
+        if (mood) moodsSet.add(mood);
+      });
+    });
 
-  const moods = useMemo(() => {
-    return [
-      ...new Set(
-        albums.flatMap((a) => a.moods ?? []).filter((m): m is string => !!m),
-      ),
-    ];
+    return {
+      genres: Array.from(genresSet).sort(),
+      subgenres: Array.from(subgenresSet).sort(),
+      moods: Array.from(moodsSet).sort(),
+    };
   }, [albums]);
 
   const sortedAndFilteredAlbums = useMemo(() => {
@@ -285,6 +294,34 @@ export default function LibraryPage() {
     activeTab,
   ]);
 
+  const displayedAlbums = useMemo(() => {
+    return sortedAndFilteredAlbums.slice(0, visibleCount);
+  }, [sortedAndFilteredAlbums, visibleCount]);
+
+  useEffect(() => {
+    if (loading || displayedAlbums.length >= sortedAndFilteredAlbums.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => prev + ITEMS_PER_PAGE);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    const currentTrigger = loadMoreRef.current;
+    if (currentTrigger) {
+      observer.observe(currentTrigger);
+    }
+
+    return () => {
+      if (currentTrigger) {
+        observer.unobserve(currentTrigger);
+      }
+    };
+  }, [loading, displayedAlbums.length, sortedAndFilteredAlbums.length]);
+
   const handleRandomAlbum = () => {
     if (!sortedAndFilteredAlbums.length) return;
 
@@ -344,6 +381,7 @@ export default function LibraryPage() {
           <Button
             variant="outline"
             size="icon"
+            aria-label="Toggle filter settings"
             className={cn(
               "h-10 w-10",
               showFilters && "border-primary/30 bg-secondary/40 text-primary",
@@ -357,6 +395,7 @@ export default function LibraryPage() {
             <Button
               variant="outline"
               size="icon"
+              aria-label="Clear all applied filters"
               onClick={handleResetFilters}
               className="h-10 w-10"
               title="Reset all filters"
@@ -403,6 +442,7 @@ export default function LibraryPage() {
           <Button
             variant={viewMode === "grid" ? "default" : "outline"}
             size="icon"
+            aria-label="Switch to grid view"
             onClick={() => setViewMode("grid")}
           >
             <Grid className="h-4 w-4" />
@@ -411,6 +451,7 @@ export default function LibraryPage() {
           <Button
             variant={viewMode === "list" ? "default" : "outline"}
             size="icon"
+            aria-label="Switch to list view"
             onClick={() => setViewMode("list")}
           >
             <List className="h-4 w-4" />
@@ -494,8 +535,8 @@ export default function LibraryPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
         <TabsList>
-          <TabsTrigger value="all">All Albums</TabsTrigger>
-          <TabsTrigger value="top" className="gap-1.5">
+          <TabsTrigger value="all" id="tab-trigger-all">All Albums</TabsTrigger>
+          <TabsTrigger value="top" id="tab-trigger-top" className="gap-1.5">
             Rated Albums
           </TabsTrigger>
         </TabsList>
@@ -503,7 +544,7 @@ export default function LibraryPage() {
 
       {viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {sortedAndFilteredAlbums.map((album: AppAlbum) => (
+          {displayedAlbums.map((album: AppAlbum, index: number) => (
             <Link href={`/album/${album.id}`} key={album.id}>
               <Card className="flex h-full flex-col justify-between overflow-hidden">
                 <div>
@@ -512,17 +553,37 @@ export default function LibraryPage() {
                       src={album.cover || "/placeholder.svg"}
                       alt={album.title}
                       fill
+                      sizes="(max-w-640px) 50vw, (max-w-1024px) 33vw, 250px"
                       className="object-cover"
+                      priority={index < 8}
                     />
                   </div>
 
                   <CardContent className="p-3 pb-0">
-                    <h3 className="line-clamp-1 text-base font-bold">
+                    <h2 className="line-clamp-1 text-base font-bold">
                       {album.title}
-                    </h3>
-                    <p className="truncate text-sm text-muted-foreground">
+                    </h2>
+                    <p className="truncate text-sm text-muted-foreground mb-1.5">
                       {album.artist}
                     </p>
+                    
+                    {album.moods && album.moods.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {album.moods.slice(0, 3).map((m) => (
+                          <span 
+                            key={m} 
+                            className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[9px] font-medium tracking-wide uppercase"
+                          >
+                            {m}
+                          </span>
+                        ))}
+                        {album.moods.length > 3 && (
+                          <span className="text-muted-foreground text-[9px] self-center">
+                            +{album.moods.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </div>
 
@@ -553,7 +614,7 @@ export default function LibraryPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {sortedAndFilteredAlbums.map((album: AppAlbum) => (
+          {displayedAlbums.map((album: AppAlbum, index: number) => (
             <Link href={`/album/${album.id}`} key={album.id}>
               <Card className="flex items-center justify-between p-3 transition-colors hover:bg-muted/40">
                 <div className="flex items-center gap-3">
@@ -562,13 +623,15 @@ export default function LibraryPage() {
                       src={album.cover || "/placeholder.svg"}
                       alt=""
                       fill
+                      sizes="40px"
                       className="object-cover"
+                      priority={index < 12}
                     />
                   </div>
                   <div>
-                    <p className="line-clamp-1 text-base font-bold">
+                    <h2 className="line-clamp-1 text-base font-bold">
                       {album.title}
-                    </p>
+                    </h2>
                     <p className="truncate text-sm text-muted-foreground">
                       {album.artist}
                     </p>
@@ -594,6 +657,12 @@ export default function LibraryPage() {
               </Card>
             </Link>
           ))}
+        </div>
+      )}
+
+      {sortedAndFilteredAlbums.length > displayedAlbums.length && (
+        <div ref={loadMoreRef} className="flex justify-center py-8 text-sm text-muted-foreground">
+          <span className="animate-pulse">Loading more masterworks...</span>
         </div>
       )}
 

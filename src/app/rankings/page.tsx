@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "~/components/ui/button";
@@ -32,6 +32,9 @@ import {
 } from "~/components/ui/table";
 
 import { useSpotifyLibrary } from "~/hooks/use-spotify-library";
+import type { AppAlbum } from "~/types/album";
+
+const ITEMS_PER_PAGE = 30;
 
 export default function RankingsPage() {
   const { albums, loading } = useSpotifyLibrary();
@@ -39,16 +42,21 @@ export default function RankingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"eloRating" | "rating">("eloRating");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [activeTab, setActiveTab] = useState<string>("all");
 
-  const [expandedGenres, setExpandedGenres] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [expandedGenres, setExpandedGenres] = useState<Record<string, boolean>>({});
+
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+  const loadMoreTableRef = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [searchQuery, sortBy, sortOrder]);
 
   const filteredAlbums = useMemo(() => {
     return albums.filter((album) => {
       const hasClassicRating = typeof album.rating === "number";
-      const hasEloMatches =
-        album.eloRating !== null && album.eloRating !== 1000;
+      const hasEloMatches = album.eloRating !== null && album.eloRating !== 1000;
       if (!hasClassicRating && !hasEloMatches) return false;
 
       return (
@@ -59,24 +67,8 @@ export default function RankingsPage() {
     });
   }, [albums, searchQuery]);
 
-  const ratedGenres = useMemo(() => {
-    return [
-      ...new Set(
-        albums
-          .filter(
-            (a) =>
-              typeof a.rating === "number" ||
-              (a.eloRating && a.eloRating !== 1000),
-          )
-          .map((a) => a.genre)
-          .filter(Boolean),
-      ),
-    ] as string[];
-  }, [albums]);
-
   const sortedAlbums = useMemo(() => {
     const sorted = [...filteredAlbums];
-
     sorted.sort((a, b) => {
       let comparison = 0;
       if (sortBy === "rating") {
@@ -86,35 +78,41 @@ export default function RankingsPage() {
       }
       return sortOrder === "desc" ? -comparison : comparison;
     });
-
     return sorted;
   }, [filteredAlbums, sortBy, sortOrder]);
 
-  const albumsByGenre = useMemo(() => {
-    return ratedGenres
-      .map((genre) => {
-        const genreAlbums = albums.filter(
-          (album) =>
-            album.genre === genre &&
-            (typeof album.rating === "number" ||
-              (album.eloRating && album.eloRating !== 1000)),
-        );
+  const displayedAlbums = useMemo(() => {
+    return sortedAlbums.slice(0, visibleCount);
+  }, [sortedAlbums, visibleCount]);
 
+  const albumsByGenre = useMemo(() => {
+    if (activeTab !== "genres") return [];
+
+    const genreMap: Record<string, AppAlbum[]> = {};
+    
+    albums.forEach((album) => {
+      if (!album.genre) return;
+      const hasClassicRating = typeof album.rating === "number";
+      const hasEloMatches = album.eloRating !== null && album.eloRating !== 1000;
+      
+      if (hasClassicRating || hasEloMatches) {
+        (genreMap[album.genre] ??= []).push(album);
+      }
+    });
+
+    return Object.entries(genreMap)
+      .map(([genre, genreAlbums]) => {
         const allSortedGenreAlbums = [...genreAlbums].sort(
           (a, b) =>
             (b.eloRating ?? 1000) - (a.eloRating ?? 1000) ||
-            (b.rating ?? 0) - (a.rating ?? 0),
+            (b.rating ?? 0) - (a.rating ?? 0)
         );
 
-        const ratedAlbumsInGenre = genreAlbums.filter(
-          (a) => typeof a.rating === "number",
-        );
+        const ratedAlbumsInGenre = genreAlbums.filter((a) => typeof a.rating === "number");
         const avgRating =
           ratedAlbumsInGenre.length > 0
-            ? ratedAlbumsInGenre.reduce(
-                (sum, album) => sum + (album.rating ?? 0),
-                0,
-              ) / ratedAlbumsInGenre.length
+            ? ratedAlbumsInGenre.reduce((sum, album) => sum + (album.rating ?? 0), 0) /
+              ratedAlbumsInGenre.length
             : 0;
 
         return {
@@ -125,7 +123,32 @@ export default function RankingsPage() {
         };
       })
       .sort((a, b) => b.albumCount - a.albumCount);
-  }, [albums, ratedGenres]);
+  }, [albums, activeTab]);
+
+  // Intersection Observer для підвантаження рядків таблиці
+  useEffect(() => {
+    if (loading || displayedAlbums.length >= sortedAlbums.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => prev + ITEMS_PER_PAGE);
+        }
+      },
+      { rootMargin: "150px" }
+    );
+
+    const currentTrigger = loadMoreTableRef.current;
+    if (currentTrigger) {
+      observer.observe(currentTrigger);
+    }
+
+    return () => {
+      if (currentTrigger) {
+        observer.unobserve(currentTrigger);
+      }
+    };
+  }, [loading, displayedAlbums.length, sortedAlbums.length]);
 
   const toggleGenreExpand = (genre: string) => {
     setExpandedGenres((prev) => ({ ...prev, [genre]: !prev[genre] }));
@@ -148,10 +171,10 @@ export default function RankingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="all" className="mb-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
         <TabsList>
-          <TabsTrigger value="all">All Rankings</TabsTrigger>
-          <TabsTrigger value="genres">By Genre</TabsTrigger>
+          <TabsTrigger value="all" id="rankings-trigger-all">All Rankings</TabsTrigger>
+          <TabsTrigger value="genres" id="rankings-trigger-genres">By Genre</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-6">
@@ -180,36 +203,16 @@ export default function RankingsPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("eloRating");
-                      setSortOrder("desc");
-                    }}
-                  >
+                  <DropdownMenuItem onClick={() => { setSortBy("eloRating"); setSortOrder("desc"); }}>
                     Elo Rating (Highest to Lowest)
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("eloRating");
-                      setSortOrder("asc");
-                    }}
-                  >
+                  <DropdownMenuItem onClick={() => { setSortBy("eloRating"); setSortOrder("asc"); }}>
                     Elo Rating (Lowest to Highest)
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("rating");
-                      setSortOrder("desc");
-                    }}
-                  >
+                  <DropdownMenuItem onClick={() => { setSortBy("rating"); setSortOrder("desc"); }}>
                     Classic Rating (Highest to Lowest)
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy("rating");
-                      setSortOrder("asc");
-                    }}
-                  >
+                  <DropdownMenuItem onClick={() => { setSortBy("rating"); setSortOrder("asc"); }}>
                     Classic Rating (Lowest to Highest)
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -217,7 +220,7 @@ export default function RankingsPage() {
             </div>
           </div>
 
-          <div className="rounded-md border bg-card">
+          <div className="rounded-md border bg-card overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -232,7 +235,7 @@ export default function RankingsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedAlbums.map((album, index) => (
+                {displayedAlbums.map((album, index) => (
                   <TableRow
                     key={album.id}
                     className="transition-colors hover:bg-secondary/40"
@@ -246,7 +249,9 @@ export default function RankingsPage() {
                           src={album.cover || "/placeholder.svg"}
                           alt=""
                           fill
+                          sizes="40px"
                           className="object-cover"
+                          priority={index < 10}
                         />
                       </div>
                     </TableCell>
@@ -287,109 +292,120 @@ export default function RankingsPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+
+                {sortedAlbums.length > displayedAlbums.length && (
+                  <TableRow ref={loadMoreTableRef} className="hover:bg-transparent">
+                    <TableCell colSpan={8} className="text-center py-4 text-xs text-muted-foreground animate-pulse">
+                      Loading more rankings...
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
         </TabsContent>
 
         <TabsContent value="genres" className="mt-6">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {albumsByGenre.map((genreData) => {
-              const isExpanded = expandedGenres[genreData.genre] ?? false;
-              const visibleAlbums = isExpanded
-                ? genreData.allAlbums
-                : genreData.allAlbums.slice(0, 3);
+          {activeTab === "genres" && (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {albumsByGenre.map((genreData) => {
+                const isExpanded = expandedGenres[genreData.genre] ?? false;
+                const visibleAlbums = isExpanded
+                  ? genreData.allAlbums
+                  : genreData.allAlbums.slice(0, 3);
 
-              return (
-                <Card
-                  key={genreData.genre}
-                  className="flex h-fit flex-col justify-between overflow-hidden transition-all hover:border-primary/20"
-                >
-                  <div>
-                    <div className="border-b bg-secondary/10 p-4">
-                      <h3 className="text-xl font-black uppercase tracking-tight text-card-foreground">
-                        {genreData.genre}
-                      </h3>
-                      <div className="mt-1 flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          {genreData.albumCount} ranked album
-                          {genreData.albumCount !== 1 ? "s" : ""}
-                        </span>
-                        <div className="flex items-center gap-1 rounded-full border border-primary/10 bg-primary/5 px-2 py-0.5">
-                          <Star className="h-3 w-3 fill-primary text-primary" />
-                          <span className="text-xs font-bold text-primary">
-                            {genreData.avgRating}
+                return (
+                  <Card
+                    key={genreData.genre}
+                    className="flex h-fit flex-col justify-between overflow-hidden transition-all hover:border-primary/20"
+                  >
+                    <div>
+                      <div className="border-b bg-secondary/10 p-4">
+                        <h2 className="text-xl font-black uppercase tracking-tight text-card-foreground">
+                          {genreData.genre}
+                        </h2>
+                        <div className="mt-1 flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            {genreData.albumCount} ranked album
+                            {genreData.albumCount !== 1 ? "s" : ""}
                           </span>
+                          <div className="flex items-center gap-1 rounded-full border border-primary/10 bg-primary/5 px-2 py-0.5">
+                            <Star className="h-3 w-3 fill-primary text-primary" />
+                            <span className="text-xs font-bold text-primary">
+                              {genreData.avgRating}
+                            </span>
+                          </div>
                         </div>
+                      </div>
+
+                      <div className="max-h-[450px] divide-y overflow-y-auto">
+                        {visibleAlbums.map((album, idx) => (
+                          <Link
+                            key={album.id}
+                            href={`/album/${album.id}`}
+                            className="flex items-center gap-3 p-3 transition-colors hover:bg-secondary/30"
+                          >
+                            <span className="w-4 text-center text-xs font-bold text-muted-foreground/40">
+                              {idx + 1}
+                            </span>
+                            <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-muted">
+                              <Image
+                                src={album.cover || "/placeholder.svg"}
+                                alt=""
+                                fill
+                                sizes="40px"
+                                className="object-cover"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold text-card-foreground">
+                                {album.title}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {album.artist}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-xs font-black text-primary">
+                                {album.eloRating ?? 1000}
+                              </span>
+                              {typeof album.rating === "number" && (
+                                <span className="flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground">
+                                  ★ {album.rating.toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                          </Link>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="max-h-[450px] divide-y overflow-y-auto">
-                      {visibleAlbums.map((album, idx) => (
-                        <Link
-                          key={album.id}
-                          href={`/album/${album.id}`}
-                          className="flex items-center gap-3 p-3 transition-colors hover:bg-secondary/30"
+                    {genreData.allAlbums.length > 3 && (
+                      <div className="border-t bg-secondary/5 p-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full gap-1 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-primary"
+                          onClick={() => toggleGenreExpand(genreData.genre)}
                         >
-                          <span className="w-4 text-center text-xs font-bold text-muted-foreground/40">
-                            {idx + 1}
-                          </span>
-                          <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-muted">
-                            <Image
-                              src={album.cover || "/placeholder.svg"}
-                              alt=""
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-card-foreground">
-                              {album.title}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {album.artist}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-0.5">
-                            <span className="text-xs font-black text-primary">
-                              {album.eloRating ?? 1000}
-                            </span>
-                            {typeof album.rating === "number" && (
-                              <span className="flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground">
-                                ★ {album.rating.toFixed(1)}
-                              </span>
-                            )}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-
-                  {genreData.allAlbums.length > 3 && (
-                    <div className="border-t bg-secondary/5 p-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full gap-1 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-primary"
-                        onClick={() => toggleGenreExpand(genreData.genre)}
-                      >
-                        {isExpanded ? (
-                          <>
-                            Show Less <ChevronUp className="h-3 w-3" />
-                          </>
-                        ) : (
-                          <>
-                            Show All ({genreData.allAlbums.length}){" "}
-                            <ChevronDown className="h-3 w-3" />
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
+                          {isExpanded ? (
+                            <>
+                              Show Less <ChevronUp className="h-3 w-3" />
+                            </>
+                          ) : (
+                            <>
+                              Show All ({genreData.allAlbums.length}){" "}
+                              <ChevronDown className="h-3 w-3" />
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

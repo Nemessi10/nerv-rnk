@@ -2,7 +2,7 @@
 // https://orm.drizzle.team/docs/sql-schema-declaration
 
 import { sql } from "drizzle-orm";
-import { pgTableCreator, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTableCreator, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 export const createTable = pgTableCreator((name) => `nerv-rnk_${name}`);
 
@@ -50,26 +50,34 @@ export const ratings = createTable(
       table.userSpotifyId,
       table.albumSpotifyId,
     ),
+    eloRatingIdx: index("rating_elo_idx").on(table.eloRating),
+    classicRatingIdx: index("rating_classic_idx").on(table.rating),
   }),
 );
 
-export const eloMatches = createTable("elo_match", (d) => ({
-  id: d.text("id").primaryKey(),
-  userSpotifyId: d
-    .text("user_id")
-    .notNull()
-    .references(() => users.spotifyId),
-  winnerId: d
-    .text("winner_id")
-    .notNull()
-    .references(() => albums.spotifyId),
-  loserId: d
-    .text("loser_id")
-    .notNull()
-    .references(() => albums.spotifyId),
-  eloDelta: d.real("elo_delta").notNull(),
-  createdAt: d.timestamp("created_at").defaultNow().notNull(),
-}));
+export const eloMatches = createTable(
+  "elo_match",
+  (d) => ({
+    id: d.text("id").primaryKey(),
+    userSpotifyId: d
+      .text("user_id")
+      .notNull()
+      .references(() => users.spotifyId),
+    winnerId: d
+      .text("winner_id")
+      .notNull()
+      .references(() => albums.spotifyId),
+    loserId: d
+      .text("loser_id")
+      .notNull()
+      .references(() => albums.spotifyId),
+    eloDelta: d.real("elo_delta").notNull(),
+    createdAt: d.timestamp("created_at").defaultNow().notNull(),
+  }),
+  (table) => ({
+    matchUserIdx: index("match_user_idx").on(table.userSpotifyId),
+  }),
+);
 
 export const albumCustomMetadata = createTable(
   "album_custom_metadata",
@@ -105,5 +113,6 @@ export const albumCustomMetadata = createTable(
       table.userSpotifyId,
       table.albumSpotifyId,
     ),
+    customGenreIdx: index("custom_genre_idx").on(table.customGenre),
   }),
 );

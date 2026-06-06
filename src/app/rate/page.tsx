@@ -183,12 +183,14 @@ export default function RatePage() {
               <TabsList className="h-7 border border-border/40 bg-secondary/20 p-1">
                 <TabsTrigger
                   value="classic"
+                  id="tab-rate-classic"
                   className="px-2 text-[9px] font-bold uppercase"
                 >
                   Classic
                 </TabsTrigger>
                 <TabsTrigger
                   value="elo"
+                  id="tab-rate-elo"
                   className="px-2 text-[9px] font-bold uppercase"
                 >
                   Elo
@@ -205,7 +207,7 @@ export default function RatePage() {
         </div>
 
         {activeTab === "classic" && (
-          <div className="flex gap-1.5 rounded-xl border border-border/40 bg-secondary/15 p-1">
+          <div className="flex gap-1.5 rounded-xl border border-border/40 bg-secondary/15 p-1" role="group" aria-label="Rating modes">
             {[
               { id: "unrated", label: "Unrated", icon: Star },
               { id: "random", label: "Random", icon: Shuffle },
@@ -216,8 +218,9 @@ export default function RatePage() {
                 variant={rateMode === mode.id ? "default" : "ghost"}
                 className="h-8 gap-2 rounded-lg px-3 transition-all"
                 onClick={() => setRateMode(mode.id as RateMode)}
+                aria-pressed={rateMode === mode.id}
               >
-                <mode.icon className="h-3.5 w-3.5" />
+                <mode.icon className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="text-[10px] font-black uppercase">
                   {mode.label}
                 </span>
@@ -239,7 +242,7 @@ export default function RatePage() {
                   {currentAlbum && (
                     <Image
                       src={currentAlbum.cover}
-                      alt={currentAlbum.title}
+                      alt={`Album cover for ${currentAlbum.title}`}
                       fill
                       className="object-cover"
                       priority
@@ -250,6 +253,7 @@ export default function RatePage() {
                     <Button
                       variant="outline"
                       size="icon"
+                      aria-label="Previous album"
                       className="h-12 w-12 rounded-full border-0 bg-black/40 backdrop-blur-md hover:bg-black/60"
                       onClick={() =>
                         updateIndex(
@@ -259,11 +263,12 @@ export default function RatePage() {
                         )
                       }
                     >
-                      <ChevronLeft className="h-6 w-6 text-white" />
+                      <ChevronLeft className="h-6 w-6 text-white" aria-hidden="true" />
                     </Button>
                     <Button
                       variant="outline"
                       size="icon"
+                      aria-label="Next album"
                       className="h-12 w-12 rounded-full border-0 bg-black/40 backdrop-blur-md hover:bg-black/60"
                       onClick={() =>
                         updateIndex(
@@ -273,7 +278,7 @@ export default function RatePage() {
                         )
                       }
                     >
-                      <ChevronRight className="h-6 w-6 text-white" />
+                      <ChevronRight className="h-6 w-6 text-white" aria-hidden="true" />
                     </Button>
                   </div>
                 </Card>
@@ -285,9 +290,10 @@ export default function RatePage() {
                 <div
                   className={`flex items-center gap-3 rounded-xl border bg-secondary/30 px-4 py-3 transition-all ${isSearchFocused ? "border-primary" : "border-transparent"}`}
                 >
-                  <Search className="h-4 w-4 text-muted-foreground" />
+                  <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                   <input
                     type="text"
+                    aria-label="Search and jump to album"
                     placeholder="Jump to album..."
                     className="w-full border-0 bg-transparent text-sm font-medium outline-none"
                     value={searchQuery}
@@ -353,7 +359,7 @@ export default function RatePage() {
                           onClick={handleRandomize}
                           className="h-7 gap-2 text-[10px] font-bold uppercase"
                         >
-                          <Shuffle className="h-3 w-3" /> Shuffle
+                          <Shuffle className="h-3 w-3" aria-hidden="true" /> Shuffle
                         </Button>
                       )}
                     </div>
@@ -364,7 +370,7 @@ export default function RatePage() {
                       </h2>
                       <p className="truncate text-lg font-bold text-muted-foreground">
                         {currentAlbum.artist}{" "}
-                        <span className="mx-2 text-primary/30">•</span>{" "}
+                        <span className="mx-2 text-primary/30" role="presentation">•</span>{" "}
                         <span className="text-primary/60">
                           {currentAlbum.year.slice(0, 4)}
                         </span>
@@ -378,7 +384,7 @@ export default function RatePage() {
                       asChild
                     >
                       <Link href={`/album/${currentAlbum.id}`}>
-                        <ExternalLink className="h-3.5 w-3.5" /> View Details
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /> View Details
                       </Link>
                     </Button>
                   </div>
@@ -392,13 +398,13 @@ export default function RatePage() {
                         <span className="text-5xl font-black tracking-tighter text-primary">
                           {(hoverRating > 0 ? hoverRating : currentRating) || 0}
                         </span>
-                        <span className="text-2xl font-black text-muted-foreground/20">
+                        <span className="text-2xl font-black text-muted-foreground/20" role="presentation">
                           /10
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center justify-between px-1" role="group" aria-label="Rate from 1 to 10 stars">
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
                         <button
                           key={s}
@@ -406,6 +412,8 @@ export default function RatePage() {
                           onMouseEnter={() => setHoverRating(s)}
                           onMouseLeave={() => setHoverRating(0)}
                           onClick={() => setCurrentRating(s)}
+                          aria-label={`Rate ${s} star${s > 1 ? "s" : ""}`}
+                          aria-pressed={currentRating === s}
                         >
                           <Star
                             className={`h-7 w-7 transition-all duration-200 ${
@@ -423,6 +431,7 @@ export default function RatePage() {
                       min="0"
                       max="10"
                       step="0.1"
+                      aria-label="Fine tune rating scale"
                       value={hoverRating > 0 ? hoverRating : currentRating}
                       onChange={(e) =>
                         setCurrentRating(parseFloat(e.target.value))
@@ -439,7 +448,7 @@ export default function RatePage() {
                       onClick={handleSaveRating}
                     >
                       {isSubmitting ? (
-                        <Loader2 className="animate-spin" />
+                        <Loader2 className="animate-spin" aria-hidden="true" />
                       ) : (
                         "CONFIRM"
                       )}
@@ -477,6 +486,7 @@ export default function RatePage() {
                   <div className="md:col-span-5">
                     <button
                       disabled={isEloLoading}
+                      aria-label={`Vote for ${eloPair[0]!.title} by ${eloPair[0]!.artist} as superior`}
                       onClick={() => {
                         void handleEloVote(eloPair[0]!.id, eloPair[1]!.id);
                       }}
@@ -485,7 +495,7 @@ export default function RatePage() {
                       <div className="relative aspect-square">
                         <Image
                           src={eloPair[0]!.cover}
-                          alt={eloPair[0]!.title}
+                          alt={`Album cover for ${eloPair[0]!.title}`}
                           fill
                           className="object-cover transition-transform group-hover:scale-105"
                         />
@@ -504,13 +514,14 @@ export default function RatePage() {
 
                   <div className="flex items-center justify-center md:col-span-1">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl">
-                      <Swords className="h-6 w-6" />
+                      <Swords className="h-6 w-6" aria-hidden="true" />
                     </div>
                   </div>
 
                   <div className="md:col-span-5">
                     <button
                       disabled={isEloLoading}
+                      aria-label={`Vote for ${eloPair[1]!.title} by ${eloPair[1]!.artist} as superior`}
                       onClick={() => {
                         void handleEloVote(eloPair[1]!.id, eloPair[0]!.id);
                       }}
@@ -519,7 +530,7 @@ export default function RatePage() {
                       <div className="relative aspect-square">
                         <Image
                           src={eloPair[1]!.cover}
-                          alt={eloPair[1]!.title}
+                          alt={`Album cover for ${eloPair[1]!.title}`}
                           fill
                           className="object-cover transition-transform group-hover:scale-105"
                         />
@@ -538,7 +549,7 @@ export default function RatePage() {
                 </>
               ) : (
                 <div className="col-span-11 flex h-[400px] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-border/40 bg-secondary/5">
-                  <Loader2 className="h-10 w-10 animate-spin text-primary/40" />
+                  <Loader2 className="h-10 w-10 animate-spin text-primary/40" aria-hidden="true" />
                   <p className="mt-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     Finding worthy opponents...
                   </p>
